@@ -116,6 +116,25 @@ export const openapi = {
     },
     "/api/recordatorios": { get: { tags: ["Agenda"], summary: "Bitácora de recordatorios enviados", security: bearer, responses: { 200: { description: "ok" } } } },
     "/api/recordatorios/ejecutar": { post: { tags: ["Agenda"], summary: "Ejecuta a mano el envío de recordatorios 48 h / 24 h (también corre cada hora con node-cron)", security: bearer, responses: { 200: { description: "{ revisadas, enviados }" } } } },
+    "/api/clinico/pacientes/{pid}/odontograma": { get: { tags: ["Expediente"], summary: "Hallazgos del odontograma con sus adendas (RF-03)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/clinico/pacientes/{pid}/hallazgos": { post: { tags: ["Expediente"], summary: "Registra un hallazgo (EXISTENTE o REQUERIDO). Caries, restauración y sellante van por superficie.", security: bearer, responses: { 201: { description: "Creado" }, 400: { description: "Diente o superficie inválidos" } } } },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}": {
+      patch: { tags: ["Expediente"], summary: "Edita un hallazgo no realizado", security: bearer, responses: { 200: { description: "ok" }, 409: { description: "Ya realizado (RN-01)" } } },
+      delete: { tags: ["Expediente"], summary: "Borra un hallazgo no realizado. Lo realizado nunca se borra (RN-01).", security: bearer, responses: { 204: { description: "Borrado" }, 409: { description: "Realizado" } } },
+    },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}/realizar": { post: { tags: ["Expediente"], summary: "Marca un hallazgo REQUERIDO como realizado (solo odontólogo)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}/adenda": { post: { tags: ["Expediente"], summary: "Adenda firmada (texto + contraseña) para corregir un procedimiento realizado", security: bearer, responses: { 201: { description: "Creada" }, 401: { description: "Contraseña incorrecta" } } } },
+    "/api/clinico/pacientes/{pid}/periodontograma": {
+      get: { tags: ["Expediente"], summary: "Exámenes periodontales con NIC calculado (RF-04)", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Expediente"], summary: "Nuevo examen: 6 sitios por diente, furca, movilidad y sangrado. Los exámenes no se editan.", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/clinico/pacientes/{pid}/notas": {
+      get: { tags: ["Expediente"], summary: "Notas SOEP en orden cronológico inverso", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Expediente"], summary: "Nueva nota SOEP (cifrada en base de datos)", security: bearer, responses: { 201: { description: "Creada" } } },
+    },
+    "/api/clinico/pacientes/{pid}/notas/{nid}": { patch: { tags: ["Expediente"], summary: "Edita mientras no esté firmada ni venza el plazo (SOEP_LOCK_HOURS, 24 h)", security: bearer, responses: { 200: { description: "ok" }, 409: { description: "Bloqueada" } } } },
+    "/api/clinico/pacientes/{pid}/notas/{nid}/firmar": { post: { tags: ["Expediente"], summary: "Firma la nota (re-autenticación con contraseña); queda inmutable", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/clinico/pacientes/{pid}/notas/{nid}/adenda": { post: { tags: ["Expediente"], summary: "Adenda firmada a una nota bloqueada", security: bearer, responses: { 201: { description: "Creada" } } } },
     "/api/clinico": {
       get: {
         tags: ["Clínico"],

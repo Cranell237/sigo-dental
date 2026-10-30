@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import { AuthProvider, useAuth } from "./auth";
 import Agenda from "./pages/Agenda";
+import Expediente from "./pages/Expediente";
 import Caja from "./pages/Caja";
 import Auditoria from "./pages/Auditoria";
 import Pacientes from "./pages/Pacientes";
@@ -78,7 +79,7 @@ function Shell() {
         </div>
       </aside>
       <main className="flex-1 p-4 md:p-8">
-        {current?.id === "auditoria" ? <Auditoria /> : current?.id === "pacientes" ? <Pacientes /> : current?.id === "agenda" ? <Agenda /> : current?.id === "caja" ? <Caja /> : current && <Placeholder key={current.id} {...current} />}
+        {current?.id === "auditoria" ? <Auditoria /> : current?.id === "pacientes" ? <Pacientes /> : current?.id === "agenda" ? <Agenda /> : current?.id === "caja" ? <Caja /> : current?.id === "clinico" ? <Expediente /> : current && <Placeholder key={current.id} {...current} />}
       </main>
     </div>
   );
