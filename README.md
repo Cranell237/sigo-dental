@@ -29,10 +29,21 @@ Contraseña de **todos** los usuarios: `Demo1234!`
 
 ### Código MFA (verificación en dos pasos)
 
-Los roles clínicos y financieros piden, después de la contraseña, un código de 6 dígitos. Todos los usuarios de demostración comparten el secreto **`JBSWY3DPEHPK3PXP`**. Para obtener el código, usa una de estas opciones:
+Los roles clínicos y financieros piden, después de la contraseña, un código de 6 dígitos. Todos los usuarios de demostración comparten el secreto **`JBSWY3DPEHPK3PXP`**, así que una sola cuenta en la app sirve para los cuatro roles.
 
-1. **App autenticadora** (Google Authenticator, Microsoft Authenticator, Authy): *Agregar cuenta → Ingresar clave de configuración*, pega `JBSWY3DPEHPK3PXP`, tipo **basada en tiempo**.
-2. **Desde el repositorio:** `npm run totp -w api` muestra el código vigente.
+**Opción 1: escanear el QR** con Microsoft Authenticator, Google Authenticator o Authy.
+
+<img src="docs/mfa-demo-qr.png" alt="QR del secreto MFA de demostración" width="200">
+
+**Opción 2: escribir la clave a mano.**
+
+- **Microsoft Authenticator:**
+  1. Toca **+** (Agregar cuenta) y elige **Otra cuenta (Google, Facebook, etc.)**.
+  2. Se abre la cámara: toca **Escribir el código manualmente** (en iPhone, *Enter code manually*).
+  3. En *Nombre de la cuenta* escribe `SIGO-Dental`, en *Clave secreta* pega `JBSWY3DPEHPK3PXP` y toca **Finalizar**.
+- **Google Authenticator:** toca **+**, elige **Ingresar una clave de configuración**, escribe `SIGO-Dental` y `JBSWY3DPEHPK3PXP`, tipo **Basada en el tiempo**.
+
+**Opción 3: desde el repositorio.** `npm run totp -w api` muestra el código vigente.
 
 El código cambia cada 30 segundos. El administrador entra solo con contraseña.
 
