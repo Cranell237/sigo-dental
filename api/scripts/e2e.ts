@@ -80,6 +80,13 @@ await paso("sin token → 401; recepción en el expediente → 403; auditor en p
   esperar((await req(t.auditor, "GET", "/pacientes")).status === 403, "auditor leyó pacientes");
 });
 
+await paso("administrador: gestión de usuarios y catálogos", async () => {
+  const u = await req(t.admin, "GET", "/usuarios");
+  esperar(u.status === 200 && u.data.length >= 5 && !("passwordHash" in u.data[0]), "listado de usuarios");
+  esperar((await req(t.odontologo, "GET", "/usuarios")).status === 403, "un odontólogo accedió a usuarios");
+  esperar((await req(t.admin, "GET", "/catalogos/consultorios")).data.length >= 2, "catálogos");
+});
+
 console.log("\nPacientes y agenda");
 await paso("datos de demostración cargados (8 pacientes, alertas críticas)", async () => {
   const r = await req(t.recepcion, "GET", "/pacientes");

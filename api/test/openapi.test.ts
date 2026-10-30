@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import request from "supertest";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { createApp } from "../src/app.js";
@@ -22,6 +22,25 @@ describe("documentación OpenAPI 3.0 (entregable 8.2)", () => {
   it("docs/openapi.json está al día (npm run openapi -w api)", async () => {
     const archivo = JSON.parse(await readFile("../docs/openapi.json", "utf8"));
     expect(archivo).toEqual(JSON.parse(JSON.stringify(openapi)));
+  });
+
+  it("documenta todas las rutas que expone el API", async () => {
+    const app = await readFile("src/app.ts", "utf8");
+    const montajes = [...app.matchAll(/app\.use\("([^"]+)", (\w+)Router\)/g)].map((m) => ({ base: m[1], nombre: m[2] }));
+    const documentadas = new Set(Object.entries(openapi.paths).flatMap(([p, ms]) => Object.keys(ms).map((m) => `${m.toUpperCase()} ${p}`)));
+    const faltan: string[] = [];
+    let revisadas = 0;
+    for (const f of await readdir("src/routes")) {
+      const m = montajes.find((x) => x.nombre === f.replace(".ts", ""));
+      expect(m, `router sin montar: ${f}`).toBeTruthy();
+      for (const r of (await readFile(`src/routes/${f}`, "utf8")).matchAll(/\w+Router\.(get|post|put|patch|delete)\("([^"]+)"/g)) {
+        revisadas++;
+        const ruta = (m!.base + (r[2] === "/" ? "" : r[2])).replace(/:(\w+)/g, "{$1}");
+        if (!documentadas.has(`${r[1].toUpperCase()} ${ruta}`)) faltan.push(`${r[1].toUpperCase()} ${ruta}`);
+      }
+    }
+    expect(revisadas).toBeGreaterThan(60); // la búsqueda de rutas funciona
+    expect(faltan).toEqual([]);
   });
 
   it("toda ruta con parámetros de ruta los declara", () => {

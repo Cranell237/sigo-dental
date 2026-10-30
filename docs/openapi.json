@@ -3,7 +3,7 @@
   "info": {
     "title": "SIGO-Dental API",
     "version": "1.0.0",
-    "description": "API REST del Sistema Integral de Gestión Odontológica y Expediente Clínico Digital.\n\n**Autenticación:** `POST /api/auth/login` (correo y contraseña). Los roles clínicos y financieros tienen MFA obligatorio: el login devuelve `mfaRequired` y un `mfaToken`, y la sesión se obtiene con `POST /api/auth/login/mfa` y el código TOTP. Las demás rutas usan `Authorization: Bearer <token>`.\n\n**Convenciones:** importes en **centavos** (enteros), porcentajes de honorarios en **puntos básicos**, fechas ISO-8601 en UTC, dientes en numeración **FDI**. Los errores devuelven `{ \"error\": \"…\" }`.\n\n**Roles:** ADMIN, ODONTOLOGO, RECEPCIONISTA, ASISTENTE, AUDITOR. Cada operación indica el permiso requerido; sin él responde 403.\n\n**Auditoría:** todo acceso a datos clínicos, pacientes, caja, inventario y reportes queda en un log inmutable con hash encadenado.",
+    "description": "API REST del Sistema Integral de Gestión Odontológica y Expediente Clínico Digital.\n\n**Autenticación:** `POST /api/auth/login` (correo y contraseña). Los roles clínicos y financieros tienen MFA obligatorio: el login devuelve `mfaRequired` y un `mfaToken`, y la sesión se obtiene con `POST /api/auth/login/mfa` y el código TOTP. Las demás rutas usan `Authorization: Bearer <token>`.\n\n**Convenciones:** importes en **centavos** (enteros), porcentajes de honorarios en **puntos básicos**, fechas ISO-8601 en UTC, dientes en numeración **FDI**. Los errores devuelven `{ \"error\": \"…\" }`.\n\n**Roles:** ADMIN, ODONTOLOGO, RECEPCIONISTA, ASISTENTE, AUDITOR. Cada operación indica el permiso requerido; sin él responde 403.\n\n**Usuarios desactivados:** el rol y el estado se verifican en cada petición, así que desactivar o cambiar el rol tiene efecto inmediato.\n\n**Auditoría:** todo acceso a datos clínicos, pacientes, caja, inventario y reportes queda en un log inmutable con hash encadenado.",
     "contact": {
       "name": "SIGO-Dental",
       "url": "https://github.com/Cranell237/sigo-dental"
@@ -73,6 +73,10 @@
     },
     {
       "name": "Reportes"
+    },
+    {
+      "name": "Usuarios",
+      "description": "Gestión de usuarios y roles (administrador)"
     },
     {
       "name": "Auditoría",
@@ -174,6 +178,74 @@
         "required": [
           "mfaRequired",
           "mfaToken"
+        ]
+      },
+      "UsuarioAdmin": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Rol"
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "mfaEnabled": {
+            "type": "boolean"
+          },
+          "especialidad": {
+            "type": "string",
+            "nullable": true,
+            "description": "Solo odontólogos"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UsuarioNuevo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Dra. Paula Ríos"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "paula.rios@sigo.test"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Rol"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "description": "Mínimo 8 caracteres con al menos una letra y un número",
+            "example": "Clave1234"
+          },
+          "especialidad": {
+            "type": "string",
+            "description": "Para odontólogos: se registra como profesional de la agenda",
+            "example": "Endodoncia"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "role",
+          "password"
         ]
       },
       "Me": {
@@ -5234,6 +5306,217 @@
           },
           "403": {
             "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/usuarios": {
+      "get": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Lista los usuarios (usuarios:gestionar)",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioAdmin"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Crea un usuario; si es odontólogo también queda como profesional. Los roles con MFA lo activan en su primer ingreso.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioNuevo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/usuarios/{id}": {
+      "patch": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Cambia nombre, rol, especialidad o estado",
+        "description": "Desactivar o cambiar el rol tiene efecto inmediato y cierra las sesiones del usuario. Nadie puede cambiarse el rol ni desactivarse a sí mismo.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "$ref": "#/components/schemas/Rol"
+                  },
+                  "activo": {
+                    "type": "boolean"
+                  },
+                  "especialidad": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/usuarios/{id}/password": {
+      "post": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Restablece la contraseña y cierra las sesiones",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Contraseña cambiada"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/usuarios/{id}/reset-mfa": {
+      "post": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Borra el MFA del usuario (debe volver a enrolarlo) y cierra sus sesiones",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "MFA restablecido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
           }
         }
       }

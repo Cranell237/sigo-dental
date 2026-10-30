@@ -15,6 +15,7 @@ import { catalogosRouter } from "./routes/catalogos.js";
 import { citasRouter } from "./routes/citas.js";
 import { cajaRouter } from "./routes/caja.js";
 import { recordatoriosRouter } from "./routes/recordatorios.js";
+import { usuariosRouter } from "./routes/usuarios.js";
 import { auditoriaRouter } from "./routes/auditoria.js";
 import { consentimientosRouter } from "./routes/consentimientos.js";
 import { recetasRouter } from "./routes/recetas.js";
@@ -77,6 +78,7 @@ export function createApp(opts: AppOptions = {}) {
   app.use("/api/citas", citasRouter);
   app.use("/api/caja", cajaRouter);
   app.use("/api/recordatorios", recordatoriosRouter);
+  app.use("/api/usuarios", usuariosRouter);
   app.use("/api/auditoria", auditoriaRouter);
 
   // Cualquier otra ruta del API: 404 en JSON (no la página de React).

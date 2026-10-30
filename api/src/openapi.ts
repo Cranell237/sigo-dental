@@ -71,6 +71,17 @@ const schemas: Record<string, Schema> = {
     ["token", "refreshToken", "user"],
   ),
   DesafioMfa: obj({ mfaRequired: { type: "boolean", enum: [true] }, mfaToken: str({ description: "Token temporal (5 min) para el paso 2." }) }, ["mfaRequired", "mfaToken"]),
+  UsuarioAdmin: obj({ id: str(), name: str(), email: str({ format: "email" }), role: ref("Rol"), activo: bool, mfaEnabled: bool, especialidad: str({ nullable: true, description: "Solo odontólogos" }), createdAt: fecha }),
+  UsuarioNuevo: obj(
+    {
+      name: str({ example: "Dra. Paula Ríos" }),
+      email: str({ format: "email", example: "paula.rios@sigo.test" }),
+      role: ref("Rol"),
+      password: str({ format: "password", minLength: 8, description: "Mínimo 8 caracteres con al menos una letra y un número", example: "Clave1234" }),
+      especialidad: str({ description: "Para odontólogos: se registra como profesional de la agenda", example: "Endodoncia" }),
+    },
+    ["name", "email", "role", "password"],
+  ),
   Me: obj({ id: str(), name: str(), email: str(), role: ref("Rol"), permissions: arr(str()), mfaEnabled: bool, mfaVerified: bool }),
 
   AnamnesisEntrada: obj(
@@ -374,6 +385,8 @@ export const openapi = {
       "",
       "**Roles:** ADMIN, ODONTOLOGO, RECEPCIONISTA, ASISTENTE, AUDITOR. Cada operación indica el permiso requerido; sin él responde 403.",
       "",
+      "**Usuarios desactivados:** el rol y el estado se verifican en cada petición, así que desactivar o cambiar el rol tiene efecto inmediato.",
+      "",
       "**Auditoría:** todo acceso a datos clínicos, pacientes, caja, inventario y reportes queda en un log inmutable con hash encadenado.",
     ].join("\n"),
     contact: { name: "SIGO-Dental", url: "https://github.com/Cranell237/sigo-dental" },
@@ -397,6 +410,7 @@ export const openapi = {
     { name: "Inventario", description: "Insumos, lotes y descargo automático (RF-14)" },
     { name: "Honorarios", description: "Liquidación de honorarios (RF-13)" },
     { name: "Reportes" },
+    { name: "Usuarios", description: "Gestión de usuarios y roles (administrador)" },
     { name: "Auditoría", description: "Log inmutable (RNF-06)" },
   ],
   components: {
@@ -650,6 +664,24 @@ export const openapi = {
     "/api/reportes/honorarios": { get: op("Reportes", { summary: "Honorarios liquidados por profesional", params: ["desde", "hasta", "formato"], okContent: reporte, errors: [400] }) },
     "/api/reportes/inventario": { get: op("Reportes", { summary: "Inventario valorizado, mínimos y lotes por vencer", params: ["formato"], okContent: reporte }) },
     "/api/reportes/ausentismo": { get: op("Reportes", { summary: "Tasa de no-show por profesional", params: ["desde", "hasta", "formato"], okContent: reporte, errors: [400] }) },
+
+    // ---------- Usuarios ----------
+    "/api/usuarios": {
+      get: op("Usuarios", { summary: "Lista los usuarios (usuarios:gestionar)", ok: arr(ref("UsuarioAdmin")) }),
+      post: op("Usuarios", { summary: "Crea un usuario; si es odontólogo también queda como profesional. Los roles con MFA lo activan en su primer ingreso.", body: ref("UsuarioNuevo"), okStatus: 201, ok: ref("UsuarioAdmin"), errors: [400, 409] }),
+    },
+    "/api/usuarios/{id}": {
+      patch: op("Usuarios", {
+        summary: "Cambia nombre, rol, especialidad o estado",
+        description: "Desactivar o cambiar el rol tiene efecto inmediato y cierra las sesiones del usuario. Nadie puede cambiarse el rol ni desactivarse a sí mismo.",
+        params: ["id"],
+        body: obj({ name: str(), role: ref("Rol"), activo: bool, especialidad: str() }),
+        ok: ref("UsuarioAdmin"),
+        errors: [400, 404, 409],
+      }),
+    },
+    "/api/usuarios/{id}/password": { post: op("Usuarios", { summary: "Restablece la contraseña y cierra las sesiones", params: ["id"], body: obj({ password: str({ format: "password", minLength: 8 }) }, ["password"]), okStatus: 204, okDescription: "Contraseña cambiada", errors: [400, 404] }) },
+    "/api/usuarios/{id}/reset-mfa": { post: op("Usuarios", { summary: "Borra el MFA del usuario (debe volver a enrolarlo) y cierra sus sesiones", params: ["id"], okStatus: 204, okDescription: "MFA restablecido", errors: [404] }) },
 
     // ---------- Auditoría ----------
     "/api/auditoria": { get: op("Auditoría", { summary: "Últimos registros del log (auditoria:leer)", params: ["limit"], ok: arr(ref("RegistroAuditoria")) }) },

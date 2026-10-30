@@ -1,31 +1,33 @@
-import { useEffect, useState } from "react";
-import { api } from "./api";
+import { useState, type ComponentType } from "react";
 import { AuthProvider, useAuth } from "./auth";
 import Agenda from "./pages/Agenda";
-import Inventario from "./pages/Inventario";
-import Honorarios from "./pages/Honorarios";
-import Reportes from "./pages/Reportes";
-import Presupuestos from "./pages/Presupuestos";
-import Expediente from "./pages/Expediente";
-import Caja from "./pages/Caja";
 import Auditoria from "./pages/Auditoria";
-import Pacientes from "./pages/Pacientes";
+import Caja from "./pages/Caja";
+import Catalogos from "./pages/Catalogos";
+import Expediente from "./pages/Expediente";
+import Honorarios from "./pages/Honorarios";
+import Inventario from "./pages/Inventario";
 import Login from "./pages/Login";
 import MfaEnroll from "./pages/MfaEnroll";
+import Pacientes from "./pages/Pacientes";
+import Presupuestos from "./pages/Presupuestos";
+import Reportes from "./pages/Reportes";
+import Usuarios from "./pages/Usuarios";
 
 // Navegación por rol: cada sección exige un permiso del API (RNF-05, RNF-08).
-const SECTIONS = [
-  { id: "pacientes", label: "Pacientes", perm: "pacientes:leer", phase: 1 },
-  { id: "agenda", label: "Agenda", perm: "agenda:leer", phase: 1 },
-  { id: "caja", label: "Caja", perm: "caja:gestionar", phase: 1 },
-  { id: "clinico", label: "Expediente clínico", perm: "clinico:leer", phase: 2 },
-  { id: "presupuestos", label: "Presupuestos", perm: "presupuestos:leer", phase: 2 },
-  { id: "inventario", label: "Inventario", perm: "inventario:leer", phase: 3 },
-  { id: "honorarios", label: "Honorarios", perm: "honorarios:leer", phase: 3 },
-  { id: "reportes", label: "Reportes", perm: "reportes:leer", phase: 3 },
-  { id: "usuarios", label: "Usuarios", perm: "usuarios:gestionar", phase: 0 },
-  { id: "auditoria", label: "Auditoría", perm: "auditoria:leer", phase: 0 },
-] as const;
+const SECTIONS: { id: string; label: string; perm: string; Page: ComponentType }[] = [
+  { id: "pacientes", label: "Pacientes", perm: "pacientes:leer", Page: Pacientes },
+  { id: "agenda", label: "Agenda", perm: "agenda:leer", Page: Agenda },
+  { id: "caja", label: "Caja", perm: "caja:gestionar", Page: Caja },
+  { id: "clinico", label: "Expediente clínico", perm: "clinico:leer", Page: Expediente },
+  { id: "presupuestos", label: "Presupuestos", perm: "presupuestos:leer", Page: Presupuestos },
+  { id: "inventario", label: "Inventario", perm: "inventario:leer", Page: Inventario },
+  { id: "honorarios", label: "Honorarios", perm: "honorarios:leer", Page: Honorarios },
+  { id: "reportes", label: "Reportes", perm: "reportes:leer", Page: Reportes },
+  { id: "catalogos", label: "Catálogos", perm: "catalogos:gestionar", Page: Catalogos },
+  { id: "usuarios", label: "Usuarios", perm: "usuarios:gestionar", Page: Usuarios },
+  { id: "auditoria", label: "Auditoría", perm: "auditoria:leer", Page: Auditoria },
+];
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Administrador",
@@ -34,22 +36,6 @@ const ROLE_LABEL: Record<string, string> = {
   ASISTENTE: "Asistente dental",
   AUDITOR: "Auditor / Contador",
 };
-
-function Placeholder({ label, phase, id }: { label: string; phase: number; id: string }) {
-  const [msg, setMsg] = useState("");
-  useEffect(() => {
-    if (id === "clinico") api("/clinico").then(() => setMsg("El API clínico respondió: acceso autorizado y registrado en auditoría."));
-  }, [id]);
-  return (
-    <section>
-      <h2 className="text-lg font-semibold">{label}</h2>
-      <p className="mt-2 text-slate-600">
-        {phase === 0 ? "Se implementa en una próxima entrega de la Fase 0." : `Módulo planificado para la Fase ${phase}.`}
-      </p>
-      {msg && <p className="mt-3 rounded bg-green-50 p-3 text-sm text-green-800">{msg}</p>}
-    </section>
-  );
-}
 
 function Shell() {
   const { me, logout } = useAuth();
@@ -85,9 +71,7 @@ function Shell() {
           <button onClick={logout} className="mt-3 rounded-lg border border-sky-400 px-3 py-1 hover:bg-sky-800">Cerrar sesión</button>
         </div>
       </aside>
-      <main className="flex-1 p-4 md:p-8">
-        {current?.id === "auditoria" ? <Auditoria /> : current?.id === "pacientes" ? <Pacientes /> : current?.id === "agenda" ? <Agenda /> : current?.id === "caja" ? <Caja /> : current?.id === "clinico" ? <Expediente /> : current?.id === "presupuestos" ? <Presupuestos /> : current?.id === "inventario" ? <Inventario /> : current?.id === "honorarios" ? <Honorarios /> : current?.id === "reportes" ? <Reportes /> : current && <Placeholder key={current.id} {...current} />}
-      </main>
+      <main className="flex-1 p-4 md:p-8">{current && <current.Page key={current.id} />}</main>
     </div>
   );
 }

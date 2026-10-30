@@ -60,7 +60,10 @@ Marca cada paso como ✅ / ❌ y anota observaciones.
 
 | # | Paso | Resultado esperado | ✅/❌ |
 |---|---|---|---|
-| D1 | Iniciar sesión (sin MFA) | Menú: Inventario, Honorarios, Reportes, Usuarios, Auditoría. | |
+| D1 | Iniciar sesión (sin MFA) | Menú: Inventario, Honorarios, Reportes, Catálogos, Usuarios, Auditoría. | |
+| D4 | Usuarios → crear un odontólogo con contraseña "corta" y luego "Clave1234" | La primera se rechaza; el usuario aparece con MFA "Pendiente de activar" y como profesional en la agenda. | |
+| D5 | Desactivar ese usuario e intentar ingresar con él | "Usuario desactivado"; ya no aparece como profesional para agendar. | |
+| D6 | Catálogos → nuevo sillón y nuevo procedimiento | Aparecen en la agenda y en caja. | |
 | D2 | Inventario → nuevo insumo y receta de consumo de un procedimiento | Se guardan; se usan en el siguiente descargo. | |
 | D3 | Honorarios → regla de monto fijo para un procedimiento | Reemplaza a la general para ese procedimiento. | |
 

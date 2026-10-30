@@ -39,6 +39,7 @@ authRouter.post("/login", async (req, res) => {
   const ok = !!user && (await bcrypt.compare(parsed.data.password, user.passwordHash));
   await recordAudit({ userId: user?.id, action: ok ? "LOGIN_PASSWORD" : "LOGIN_FALLIDO", resource: "auth", ip: req.ip });
   if (!user || !ok) return res.status(401).json({ error: "Credenciales incorrectas" });
+  if (!user.activo) return res.status(403).json({ error: "Usuario desactivado. Contacta al administrador." });
 
   if (user.mfaEnabled) {
     const mfaToken = jwt.sign({ purpose: "mfa" }, config.jwtSecret, { subject: user.id, expiresIn: "5m" });
@@ -62,6 +63,7 @@ authRouter.post("/login/mfa", async (req, res) => {
   const ok = !!user && codeOk(user, parsed.data.code);
   await recordAudit({ userId: sub, action: ok ? "LOGIN_MFA" : "LOGIN_MFA_FALLIDO", resource: "auth", ip: req.ip });
   if (!user || !ok) return res.status(401).json({ error: "Código incorrecto" });
+  if (!user.activo) return res.status(403).json({ error: "Usuario desactivado. Contacta al administrador." });
   res.json(await issueSession(user, true));
 });
 
@@ -97,7 +99,7 @@ authRouter.post("/refresh", async (req, res) => {
   }
   if (row.expiresAt < new Date()) return res.status(401).json({ error: "Sesión expirada por inactividad" });
   const user = await prisma.user.findUnique({ where: { id: row.userId } });
-  if (!user) return res.status(401).json({ error: "Sesión inválida" });
+  if (!user?.activo) return res.status(401).json({ error: "Sesión inválida" });
   await prisma.refreshToken.update({ where: { id: row.id }, data: { revoked: true } });
   res.json(await issueSession(user, row.mfa));
 });

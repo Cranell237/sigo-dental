@@ -32,8 +32,10 @@ catalogosRouter.post("/consultorios/:id/sillones", gestionar, async (req, res) =
   }
 });
 
+// No se ofrecen para agendar los profesionales cuyo usuario fue desactivado.
 catalogosRouter.get("/profesionales", leer, async (_req, res) => {
-  res.json(await prisma.profesional.findMany({ orderBy: { nombre: "asc" } }));
+  const inactivos = (await prisma.user.findMany({ where: { activo: false }, select: { id: true } })).map((u) => u.id);
+  res.json(await prisma.profesional.findMany({ where: { OR: [{ userId: null }, { userId: { notIn: inactivos } }] }, orderBy: { nombre: "asc" } }));
 });
 
 catalogosRouter.post("/profesionales", gestionar, async (req, res) => {

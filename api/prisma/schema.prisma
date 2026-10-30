@@ -16,6 +16,7 @@ model User {
   passwordHash String
   mfaSecret    String? // cifrado con AES-256-GCM
   mfaEnabled   Boolean  @default(false)
+  activo       Boolean  @default(true) // un usuario desactivado no puede iniciar sesión
   createdAt    DateTime @default(now())
 }
 

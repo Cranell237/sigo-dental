@@ -21,7 +21,7 @@ Contraseña de **todos** los usuarios: `Demo1234!`
 
 | Rol | Usuario | MFA | Qué puede hacer |
 |---|---|---|---|
-| Administrador | `admin@sigo.test` | No | Catálogos, insumos y recetas de consumo, reglas de honorarios, reportes, auditoría |
+| Administrador | `admin@sigo.test` | No | **Usuarios** (alta, rol, activar/desactivar, contraseña, MFA), **catálogos** (consultorios, sillones, procedimientos, profesionales), insumos y recetas de consumo, reglas de honorarios, reportes, auditoría |
 | Odontólogo | `odontologo@sigo.test` | Sí | Pacientes, agenda, expediente clínico completo (firma notas, marca procedimientos, emite recetas), presupuestos, inventario (lectura) |
 | Recepcionista / Cajero | `recepcion@sigo.test` | Sí | Pacientes, agenda, caja y facturación, aprobación y agendado de presupuestos |
 | Asistente dental | `asistente@sigo.test` | Sí | Pacientes, agenda (lectura), notas clínicas sin firma, inventario |
@@ -68,6 +68,7 @@ Cada arranque carga, a través del propio API (respetando todas las reglas de ne
 
 | Módulo | Qué incluye | Requisitos |
 |---|---|---|
+| Usuarios | Alta con rol y contraseña segura (los odontólogos quedan como profesionales de la agenda), cambio de rol, activar/desactivar con **efecto inmediato** (el rol y el estado se verifican en cada petición), restablecer contraseña o MFA | §3 |
 | Seguridad | Roles y permisos, MFA TOTP obligatorio para roles clínicos/financieros, sesión de 15 min por inactividad, refresh token rotativo, límite de intentos de login, cifrado AES-256-GCM de datos clínicos, cabeceras HTTP seguras | RNF-04, RNF-05 |
 | Auditoría | Log inmutable de cada acceso (quién, qué, cuándo en ISO-8601, IP) con hash encadenado y verificación de integridad | RNF-06 |
 | Pacientes | Ficha única, tutor legal obligatorio para menores, anamnesis obligatoria, **badge de alerta** en todas las pantallas | RF-01, RF-02 |
@@ -88,7 +89,7 @@ Las integraciones externas (SRI, WhatsApp/SMS/correo, pasarela de pagos) funcion
 
 ## Documentación técnica del API (OpenAPI / Swagger 3.0)
 
-- **Especificación OpenAPI 3.0.3:** [`docs/openapi.json`](docs/openapi.json), también publicada en `/api/docs/openapi.json`. Documenta las 63 rutas con:
+- **Especificación OpenAPI 3.0.3:** [`docs/openapi.json`](docs/openapi.json), también publicada en `/api/docs/openapi.json`. Documenta las 67 rutas con:
   - esquemas de datos;
   - parámetros;
   - cuerpos de petición con ejemplos;
@@ -149,7 +150,7 @@ npm run dev
 
 | Comando | Qué hace | Resultado |
 |---|---|---|
-| `npm test` | 102 pruebas automatizadas del API | Todas pasan (también en CI) |
+| `npm test` | 114 pruebas automatizadas del API | Todas pasan (también en CI) |
 | `npm run coverage -w api` | Cobertura de código | 94 % de líneas; endpoints críticos > 80 % |
 | `npm run e2e -w api` | Prueba funcional de punta a punta contra producción (`BASE_URL=…` para otro entorno) | 21/21 pasos |
 | `npm run carga -w api` | 150 conexiones concurrentes | Expediente clínico: p99 < 400 ms, 0 errores |
@@ -174,5 +175,4 @@ Guion de pruebas de aceptación por rol, con acta para firmar: [`docs/uat.md`](d
 - **Persistencia:** en el plan gratuito de Render la base se reinicia con cada reinicio del servicio. Para conservar datos se usa Render Postgres o un disco persistente; ver [`docs/despliegue.md`](docs/despliegue.md).
 - **Integraciones simuladas:** SRI, mensajería y pasarela de pagos no se conectan a proveedores reales.
 - **Firma de notas:** se usa firma simple (re-autenticación y sello HMAC), no un certificado de firma electrónica `.p12`.
-- **Gestión de usuarios:** no hay pantalla de administración; los usuarios vienen de la semilla.
 - **Credenciales públicas:** las credenciales y el secreto MFA de demostración son públicos a propósito. No usar este despliegue con datos reales.

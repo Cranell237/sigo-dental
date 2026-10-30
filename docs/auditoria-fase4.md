@@ -49,5 +49,4 @@ Con 150 usuarios concurrentes la lectura del expediente responde en menos de 0,4
 ## Pendiente
 
 - **DAST con OWASP ZAP** contra la URL de Render: requiere descargar la imagen Docker de ZAP (~1,5 GB). Comando listo: `docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://<tu-servicio>.onrender.com`.
-- **Gestión de usuarios** desde la interfaz (la sección "Usuarios" del administrador es un marcador): los usuarios se crean hoy por la semilla.
 - Ejecutar el guion de UAT (`docs/uat.md`) con el evaluador y firmar el acta.
