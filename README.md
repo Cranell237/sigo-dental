@@ -4,6 +4,7 @@ Sistema Integral de Gestión Odontológica y Expediente Clínico Digital (proyec
 
 ## Documentación
 - Requerimientos: [`docs/srs-sigo-dental.md`](docs/srs-sigo-dental.md)
+- Arquitectura: [`docs/architecture.md`](docs/architecture.md)
 - Plan de implementación por fases: [`docs/plan-de-implementacion.md`](docs/plan-de-implementacion.md)
 
 ## Stack
@@ -26,4 +27,4 @@ Usuarios de demo (contraseña `Demo1234!`): admin, odontologo, recepcion, asiste
 MFA: todos menos admin lo tienen activo con el secreto de demo `JBSWY3DPEHPK3PXP` (agrégalo a Google Authenticator o similar). API docs en `/api/docs`.
 
 ## Estado
-Fase 0 casi completa: RBAC, login con MFA TOTP, refresh rotativo, cierre por inactividad, auditoría append-only, cifrado AES-256-GCM, Swagger, CI y shell del frontend. Pendiente: pulido responsive/pruebas en tablet y docs/architecture.md.
+Fase 0 completa: RBAC, login con MFA TOTP, refresh rotativo, cierre por inactividad, auditoría append-only, cifrado AES-256-GCM, Swagger, CI y shell del frontend. Ver [`docs/architecture.md`](docs/architecture.md). Siguiente: Fase 1 (pacientes, agenda y caja).

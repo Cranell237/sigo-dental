@@ -56,7 +56,7 @@ Requisitos previos: el proyecto debe ser un repositorio git y tener remoto en Gi
 
 ---
 
-## Fase 0 — Fundamentos y seguridad base (Sprint 0)
+## Fase 0 — Fundamentos y seguridad base (Sprint 0) — ✅ completada
 
 **Objetivo:** un esqueleto que ya cumpla los RNF transversales, para que todo módulo nuevo los herede.
 

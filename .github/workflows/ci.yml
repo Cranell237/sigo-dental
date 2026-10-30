@@ -15,6 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm exec -w api -- prisma generate
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -23,6 +24,8 @@ jobs:
       - run: npm audit --omit=dev --audit-level=critical
 
   codeql:
+    # El análisis de código solo está disponible en repos públicos (o con GitHub Advanced Security).
+    if: github.event.repository.private == false
     runs-on: ubuntu-latest
     permissions:
       security-events: write
