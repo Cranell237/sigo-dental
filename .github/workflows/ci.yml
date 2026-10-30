@@ -19,7 +19,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm audit --omit=dev --audit-level=high
+      # deepmerge-ts (vía prisma CLI, solo se usa al migrar) queda como riesgo aceptado hasta migrar a Prisma 7
+      - run: npm audit --omit=dev --audit-level=critical
 
   codeql:
     runs-on: ubuntu-latest

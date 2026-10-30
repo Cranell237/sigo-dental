@@ -23,6 +23,7 @@ npm run dev
 Web en http://localhost:5173 · API en http://localhost:3000/api/health
 
 Usuarios de demo (contraseña `Demo1234!`): admin, odontologo, recepcion, asistente, auditor @sigo.test
+MFA: todos menos admin lo tienen activo con el secreto de demo `JBSWY3DPEHPK3PXP` (agrégalo a Google Authenticator o similar). API docs en `/api/docs`.
 
 ## Estado
-Fase 0 en curso: esqueleto (web + api + Prisma/SQLite + render.yaml) listo. Pendiente: RBAC, login/MFA, auditoría, CI.
+Fase 0 casi completa: RBAC, login con MFA TOTP, refresh rotativo, cierre por inactividad, auditoría append-only, cifrado AES-256-GCM, Swagger, CI y shell del frontend. Pendiente: pulido responsive/pruebas en tablet y docs/architecture.md.
