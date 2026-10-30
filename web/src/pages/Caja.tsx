@@ -26,7 +26,10 @@ const METODOS: Record<string, string> = {
   TARJETA_DEBITO: "Tarjeta de débito",
   TRANSFERENCIA: "Transferencia",
   SEGURO: "Seguro",
+  PASARELA: "Pasarela de pagos",
 };
+// Tokens de prueba de la pasarela simulada (nunca se escriben números de tarjeta).
+const TOKENS: Record<string, string> = { tok_visa: "Visa de prueba (aprueba)", tok_mastercard: "Mastercard de prueba (aprueba)", tok_declined: "Tarjeta rechazada", tok_sinfondos: "Fondos insuficientes" };
 const field = "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2";
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 // Los importes viajan como enteros en centavos; el usuario escribe dólares.
@@ -36,7 +39,7 @@ const err = (e: unknown) => (e instanceof ApiError ? e.message : "Error");
 function Cobrar({ procs, pacientes, onDone }: { procs: Proc[]; pacientes: Pac[]; onDone: (c: Cobro) => void }) {
   const [patientId, setPatientId] = useState("");
   const [lineas, setLineas] = useState<{ procedimientoId: string; cantidad: number }[]>([{ procedimientoId: procs[0]?.id ?? "", cantidad: 1 }]);
-  const [pagos, setPagos] = useState<{ metodo: string; monto: string }[]>([{ metodo: "EFECTIVO", monto: "" }]);
+  const [pagos, setPagos] = useState<{ metodo: string; monto: string; token?: string }[]>([{ metodo: "EFECTIVO", monto: "" }]);
   const [error, setError] = useState("");
 
   const total = lineas.reduce((s, l) => s + (procs.find((p) => p.id === l.procedimientoId)?.precioBase ?? 0) * l.cantidad, 0);
@@ -49,7 +52,7 @@ function Cobrar({ procs, pacientes, onDone }: { procs: Proc[]; pacientes: Pac[];
       const c = await api<Cobro>("/caja/cobros", "POST", {
         patientId,
         lineas,
-        pagos: pagos.map((p) => ({ metodo: p.metodo, monto: aCentavos(p.monto) })),
+        pagos: pagos.map((p) => ({ metodo: p.metodo, monto: aCentavos(p.monto), token: p.metodo === "PASARELA" ? p.token ?? "tok_visa" : undefined })),
       });
       onDone(c);
     } catch (x) {
@@ -84,9 +87,10 @@ function Cobrar({ procs, pacientes, onDone }: { procs: Proc[]; pacientes: Pac[];
         <p className="text-sm font-medium">Pagos (pueden combinarse)</p>
         {pagos.map((p, i) => (
           <div key={i} className="flex gap-2">
-            <select className={field} value={p.metodo} onChange={(e) => setPagos(pagos.map((x, j) => (j === i ? { ...x, metodo: e.target.value } : x)))}>
+            <select className={field} value={p.metodo} onChange={(e) => setPagos(pagos.map((x, j) => (j === i ? { ...x, metodo: e.target.value, token: e.target.value === "PASARELA" ? "tok_visa" : undefined } : x)))}>
               {Object.entries(METODOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
+            {p.metodo === "PASARELA" && <select aria-label="Token de pago" className={field} value={p.token} onChange={(e) => setPagos(pagos.map((x, j) => (j === i ? { ...x, token: e.target.value } : x)))}>{Object.entries(TOKENS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>}
             <input className={field} inputMode="decimal" placeholder="0.00" required value={p.monto} onChange={(e) => setPagos(pagos.map((x, j) => (j === i ? { ...x, monto: e.target.value } : x)))} />
             {pagos.length > 1 && <button type="button" className="px-2 text-slate-500" onClick={() => setPagos(pagos.filter((_, j) => j !== i))}>✕</button>}
           </div>

@@ -124,7 +124,7 @@ Requisitos previos: el proyecto debe ser un repositorio git y tener remoto en Gi
 
 ---
 
-## Fase 3 — Finanzas avanzadas, inventario y reportes (Sprints 9-11)
+## Fase 3 — Finanzas avanzadas, inventario y reportes (Sprints 9-11) — ✅ completada
 
 | # | Entregable | Cubre |
 |---|---|---|

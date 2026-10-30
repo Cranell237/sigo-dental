@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api";
 import { ESTADO_LABEL, FILAS, SUPERFICIES, TIPOS, fdiAUniversal } from "../dental";
 import { PasswordDialog } from "./PasswordDialog";
@@ -119,11 +119,56 @@ function NuevoHallazgo({ pid, sel, onDone }: { pid: string; sel: NonNullable<Sel
   );
 }
 
+function Realizar({ pid, h, onCancel, onDone }: { pid: string; h: Hallazgo; onCancel: () => void; onDone: () => void }) {
+  const [procs, setProcs] = useState<{ id: string; nombre: string }[]>([]);
+  const [consultorios, setConsultorios] = useState<{ id: string; nombre: string }[]>([]);
+  const [procId, setProcId] = useState("");
+  const [consultorioId, setConsultorioId] = useState("");
+  const [lab, setLab] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api<{ id: string; nombre: string }[]>("/catalogos/procedimientos").then(setProcs);
+    api<{ id: string; nombre: string }[]>("/catalogos/consultorios").then((c) => { setConsultorios(c); setConsultorioId(c[0]?.id ?? ""); });
+  }, []);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      await api(`/clinico/pacientes/${pid}/hallazgos/${h.id}/realizar`, "POST", procId ? { procedimientoId: procId, consultorioId, costoLaboratorio: Math.round(parseFloat((lab || "0").replace(",", ".")) * 100) || 0 } : {});
+      onDone();
+    } catch (x) {
+      const d = x instanceof ApiError ? (x.data as { faltantes?: { insumo: string; requerido: number; disponible: number }[] }) : undefined;
+      setError(x instanceof ApiError ? x.message + (d?.faltantes ? ": " + d.faltantes.map((f) => `${f.insumo} (necesita ${f.requerido}, hay ${f.disponible})`).join("; ") : "") : "Error");
+    }
+  }
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Marcar como realizado" className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
+      <form onSubmit={submit} className="w-full max-w-md space-y-3 rounded-xl bg-white p-5 text-sm shadow-lg">
+        <h3 className="font-semibold">Marcar como realizado: {TIPOS[h.tipo].nombre} · diente {h.diente}</h3>
+        <p className="text-slate-600">Lo realizado no podrá modificarse ni borrarse. Si eliges el procedimiento, se descuentan sus insumos del consultorio y queda listo para liquidar honorarios.</p>
+        <label className="block">Procedimiento del catálogo<select className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" value={procId} onChange={(e) => setProcId(e.target.value)}><option value="">Sin descargo de insumos</option>{procs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label>
+        {procId && (
+          <>
+            <label className="block">Consultorio<select className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" value={consultorioId} onChange={(e) => setConsultorioId(e.target.value)}>{consultorios.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+            <label className="block">Costo de laboratorio (USD)<input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" inputMode="decimal" value={lab} onChange={(e) => setLab(e.target.value)} /></label>
+          </>
+        )}
+        {error && <p role="alert" className="rounded bg-red-50 p-2 text-red-700">{error}</p>}
+        <div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-3 py-1.5 text-slate-600">Cancelar</button><button className="rounded-lg bg-sky-600 px-4 py-1.5 text-white">Confirmar</button></div>
+      </form>
+    </div>
+  );
+}
+
 export default function Odontograma({ pid, hallazgos, puedeEscribir, puedeFirmar, onChange }: { pid: string; hallazgos: Hallazgo[]; puedeEscribir: boolean; puedeFirmar: boolean; onChange: () => void }) {
   const [dentadura, setDentadura] = useState<"permanente" | "temporal">("permanente");
   const [universal, setUniversal] = useState(false);
   const [sel, setSel] = useState<Sel>(null);
   const [adenda, setAdenda] = useState<Hallazgo | null>(null);
+  const [realizar, setRealizar] = useState<Hallazgo | null>(null);
   const [error, setError] = useState("");
   const filas = FILAS[dentadura];
   const lista = [...hallazgos].sort((a, b) => a.diente.localeCompare(b.diente));
@@ -184,13 +229,15 @@ export default function Odontograma({ pid, hallazgos, puedeEscribir, puedeFirmar
               {h.adendas.map((a) => <span key={a.id} className="mt-1 block rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">Adenda firmada: {a.texto}</span>)}
             </span>
             <span className={`rounded-full px-2 py-0.5 text-xs ${h.estado === "REALIZADO" ? "bg-green-100 text-green-800" : h.estado === "REQUERIDO" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>{ESTADO_LABEL[h.estado]}</span>
-            {h.estado === "REQUERIDO" && puedeFirmar && <button className="rounded border border-slate-300 px-2 py-0.5 text-xs" onClick={() => accion(() => api(`/clinico/pacientes/${pid}/hallazgos/${h.id}/realizar`, "POST"))}>Marcar realizado</button>}
+            {h.estado === "REQUERIDO" && puedeFirmar && <button className="rounded border border-slate-300 px-2 py-0.5 text-xs" onClick={() => setRealizar(h)}>Marcar realizado</button>}
             {h.estado !== "REALIZADO" && puedeEscribir && <button className="px-2 text-xs text-red-700" onClick={() => accion(() => api(`/clinico/pacientes/${pid}/hallazgos/${h.id}`, "DELETE"))}>Eliminar</button>}
             {h.estado === "REALIZADO" && puedeFirmar && <button className="rounded border border-amber-400 px-2 py-0.5 text-xs" onClick={() => setAdenda(h)}>Adenda</button>}
           </li>
         ))}
         {!lista.length && <li className="px-4 py-6 text-center text-slate-500">Sin hallazgos registrados.</li>}
       </ul>
+
+      {realizar && <Realizar pid={pid} h={realizar} onCancel={() => setRealizar(null)} onDone={() => { setRealizar(null); onChange(); }} />}
 
       {adenda && (
         <PasswordDialog

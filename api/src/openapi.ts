@@ -122,7 +122,7 @@ export const openapi = {
       patch: { tags: ["Expediente"], summary: "Edita un hallazgo no realizado", security: bearer, responses: { 200: { description: "ok" }, 409: { description: "Ya realizado (RN-01)" } } },
       delete: { tags: ["Expediente"], summary: "Borra un hallazgo no realizado. Lo realizado nunca se borra (RN-01).", security: bearer, responses: { 204: { description: "Borrado" }, 409: { description: "Realizado" } } },
     },
-    "/api/clinico/pacientes/{pid}/hallazgos/{hid}/realizar": { post: { tags: ["Expediente"], summary: "Marca un hallazgo REQUERIDO como realizado (solo odontólogo)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}/realizar": { post: { tags: ["Expediente"], summary: "Marca un hallazgo REQUERIDO como realizado (solo odontólogo). Con procedimientoId y consultorioId descuenta los insumos de su receta en una sola transacción (409 STOCK_INSUFICIENTE si falta).", security: bearer, responses: { 200: { description: "ok" } } } },
     "/api/clinico/pacientes/{pid}/hallazgos/{hid}/adenda": { post: { tags: ["Expediente"], summary: "Adenda firmada (texto + contraseña) para corregir un procedimiento realizado", security: bearer, responses: { 201: { description: "Creada" }, 401: { description: "Contraseña incorrecta" } } } },
     "/api/clinico/pacientes/{pid}/periodontograma": {
       get: { tags: ["Expediente"], summary: "Exámenes periodontales con NIC calculado (RF-04)", security: bearer, responses: { 200: { description: "ok" } } },
@@ -155,6 +155,26 @@ export const openapi = {
     "/api/presupuestos/{id}/presentar": { post: { tags: ["Presupuestos"], summary: "Presenta el borrador al paciente", security: bearer, responses: { 200: { description: "ok" } } } },
     "/api/presupuestos/{id}/aprobar": { post: { tags: ["Presupuestos"], summary: "Aprobación total (sin itemIds) o parcial (itemIds)", security: bearer, responses: { 200: { description: "ok" } } } },
     "/api/presupuestos/items/{iid}/agendar": { post: { tags: ["Presupuestos"], summary: "Convierte un ítem aprobado en cita respetando RN-03", security: bearer, responses: { 201: { description: "Cita creada" }, 409: { description: "Sillón ocupado o ítem no agendable" } } } },
+    "/api/inventario": { get: { tags: ["Inventario"], summary: "Insumos con stock por consultorio, lotes y alerta de mínimo (?consultorioId=)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/inventario/insumos": { post: { tags: ["Inventario"], summary: "Crea un insumo (admin). Costo unitario en centavos.", security: bearer, responses: { 201: { description: "Creado" } } } },
+    "/api/inventario/entradas": { post: { tags: ["Inventario"], summary: "Ingresa un lote (suma si el lote ya existe)", security: bearer, responses: { 201: { description: "Lote" } } } },
+    "/api/inventario/ajustes": { post: { tags: ["Inventario"], summary: "Ajuste por conteo físico, con motivo", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/inventario/movimientos": { get: { tags: ["Inventario"], summary: "Libro de movimientos (solo inserción)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/inventario/receta-consumo/{procedimientoId}": {
+      get: { tags: ["Inventario"], summary: "Receta estándar de consumo del procedimiento", security: bearer, responses: { 200: { description: "ok" } } },
+      put: { tags: ["Inventario"], summary: "Reemplaza la receta (admin)", security: bearer, responses: { 200: { description: "ok" } } },
+    },
+    "/api/honorarios/reglas": {
+      get: { tags: ["Honorarios"], summary: "Reglas de un profesional", security: bearer, responses: { 200: { description: "ok" } } },
+      put: { tags: ["Honorarios"], summary: "Define o reemplaza una regla: PORCENTAJE y PORCENTAJE_NETO en puntos básicos (4000 = 40 %), MONTO_FIJO en centavos (admin)", security: bearer, responses: { 200: { description: "ok" } } },
+    },
+    "/api/honorarios/previsualizar": { get: { tags: ["Honorarios"], summary: "Calcula la liquidación sin guardarla; lista lo que no tiene regla", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/honorarios/liquidar": { post: { tags: ["Honorarios"], summary: "Liquida los procedimientos pendientes del periodo. Cada uno se liquida una sola vez.", security: bearer, responses: { 201: { description: "Liquidación" }, 409: { description: "Nada que liquidar" } } } },
+    "/api/honorarios/liquidaciones": { get: { tags: ["Honorarios"], summary: "Historial de liquidaciones", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/reportes/corte-caja": { get: { tags: ["Reportes"], summary: "Corte de caja por turno cerrado, con el cuadre de efectivo (?formato=csv para exportar)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/reportes/honorarios": { get: { tags: ["Reportes"], summary: "Honorarios liquidados por profesional", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/reportes/inventario": { get: { tags: ["Reportes"], summary: "Inventario valorizado con alertas de mínimo y lotes por vencer", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/reportes/ausentismo": { get: { tags: ["Reportes"], summary: "Tasa de no-show por profesional", security: bearer, responses: { 200: { description: "ok" } } } },
     "/api/clinico": {
       get: {
         tags: ["Clínico"],
