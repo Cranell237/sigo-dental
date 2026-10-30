@@ -103,7 +103,7 @@ Requisitos previos: el proyecto debe ser un repositorio git y tener remoto en Gi
 
 ---
 
-## Fase 2 — Core clínico (Sprints 5-8)
+## Fase 2 — Core clínico (Sprints 5-8) — ✅ completada
 
 | # | Entregable | Cubre |
 |---|---|---|

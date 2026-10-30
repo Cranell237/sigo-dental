@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import { AuthProvider, useAuth } from "./auth";
 import Agenda from "./pages/Agenda";
+import Presupuestos from "./pages/Presupuestos";
 import Expediente from "./pages/Expediente";
 import Caja from "./pages/Caja";
 import Auditoria from "./pages/Auditoria";
@@ -15,6 +16,7 @@ const SECTIONS = [
   { id: "agenda", label: "Agenda", perm: "agenda:leer", phase: 1 },
   { id: "caja", label: "Caja", perm: "caja:gestionar", phase: 1 },
   { id: "clinico", label: "Expediente clínico", perm: "clinico:leer", phase: 2 },
+  { id: "presupuestos", label: "Presupuestos", perm: "presupuestos:leer", phase: 2 },
   { id: "reportes", label: "Reportes", perm: "reportes:leer", phase: 3 },
   { id: "usuarios", label: "Usuarios", perm: "usuarios:gestionar", phase: 0 },
   { id: "auditoria", label: "Auditoría", perm: "auditoria:leer", phase: 0 },
@@ -79,7 +81,7 @@ function Shell() {
         </div>
       </aside>
       <main className="flex-1 p-4 md:p-8">
-        {current?.id === "auditoria" ? <Auditoria /> : current?.id === "pacientes" ? <Pacientes /> : current?.id === "agenda" ? <Agenda /> : current?.id === "caja" ? <Caja /> : current?.id === "clinico" ? <Expediente /> : current && <Placeholder key={current.id} {...current} />}
+        {current?.id === "auditoria" ? <Auditoria /> : current?.id === "pacientes" ? <Pacientes /> : current?.id === "agenda" ? <Agenda /> : current?.id === "caja" ? <Caja /> : current?.id === "clinico" ? <Expediente /> : current?.id === "presupuestos" ? <Presupuestos /> : current && <Placeholder key={current.id} {...current} />}
       </main>
     </div>
   );

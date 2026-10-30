@@ -135,6 +135,26 @@ export const openapi = {
     "/api/clinico/pacientes/{pid}/notas/{nid}": { patch: { tags: ["Expediente"], summary: "Edita mientras no esté firmada ni venza el plazo (SOEP_LOCK_HOURS, 24 h)", security: bearer, responses: { 200: { description: "ok" }, 409: { description: "Bloqueada" } } } },
     "/api/clinico/pacientes/{pid}/notas/{nid}/firmar": { post: { tags: ["Expediente"], summary: "Firma la nota (re-autenticación con contraseña); queda inmutable", security: bearer, responses: { 200: { description: "ok" } } } },
     "/api/clinico/pacientes/{pid}/notas/{nid}/adenda": { post: { tags: ["Expediente"], summary: "Adenda firmada a una nota bloqueada", security: bearer, responses: { 201: { description: "Creada" } } } },
+    "/api/consentimientos/plantillas": { get: { tags: ["Consentimientos"], summary: "Plantillas por procedimiento", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/consentimientos": {
+      get: { tags: ["Consentimientos"], summary: "Consentimientos de un paciente (?patientId=)", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Consentimientos"], summary: "Genera un consentimiento (metodo FIRMA u OTP). Con OTP envía el código al paciente o a su tutor.", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/consentimientos/{id}/firmar": { post: { tags: ["Consentimientos"], summary: "Firma con trazo PNG (data URL) o código OTP; genera el PDF. Queda inmutable.", security: bearer, responses: { 200: { description: "Firmado" }, 401: { description: "OTP incorrecto" }, 410: { description: "OTP vencido" } } } },
+    "/api/consentimientos/{id}/pdf": { get: { tags: ["Consentimientos"], summary: "PDF del consentimiento firmado", security: bearer, responses: { 200: { description: "application/pdf" } } } },
+    "/api/recetas": {
+      get: { tags: ["Recetas"], summary: "Recetas de un paciente (?patientId=)", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Recetas"], summary: "Emite una receta en PDF (solo odontólogo). 409 ALERGIA si el medicamento coincide con una alergia registrada, salvo confirmarAlergia.", security: bearer, responses: { 201: { description: "Emitida" }, 409: { description: "Alergia registrada" } } },
+    },
+    "/api/recetas/{id}/pdf": { get: { tags: ["Recetas"], summary: "PDF de la receta", security: bearer, responses: { 200: { description: "application/pdf" } } } },
+    "/api/presupuestos": {
+      get: { tags: ["Presupuestos"], summary: "Presupuestos de un paciente con totales (?patientId=)", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Presupuestos"], summary: "Crea un borrador por fases y sesiones (importes en centavos; el precio sale del catálogo). El descuento lo autoriza el odontólogo.", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/presupuestos/agendables": { get: { tags: ["Presupuestos"], summary: "Ítems aprobados aún sin cita (?patientId=)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/presupuestos/{id}/presentar": { post: { tags: ["Presupuestos"], summary: "Presenta el borrador al paciente", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/presupuestos/{id}/aprobar": { post: { tags: ["Presupuestos"], summary: "Aprobación total (sin itemIds) o parcial (itemIds)", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/presupuestos/items/{iid}/agendar": { post: { tags: ["Presupuestos"], summary: "Convierte un ítem aprobado en cita respetando RN-03", security: bearer, responses: { 201: { description: "Cita creada" }, 409: { description: "Sillón ocupado o ítem no agendable" } } } },
     "/api/clinico": {
       get: {
         tags: ["Clínico"],

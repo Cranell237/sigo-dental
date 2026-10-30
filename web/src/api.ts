@@ -68,3 +68,15 @@ export async function api<T = any>(path: string, method = "GET", body?: unknown,
   if (!res.ok) throw new ApiError(res.status, data?.error ?? "Error de red", data);
   return data as T;
 }
+
+/** Descarga un archivo protegido (PDF, XML) enviando el token de acceso. */
+export async function descargar(path: string, nombre: string) {
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${session?.token}` } });
+  if (!res.ok) throw new ApiError(res.status, "No se pudo descargar el archivo");
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  a.click();
+  URL.revokeObjectURL(url);
+}

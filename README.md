@@ -29,4 +29,5 @@ MFA: todos menos admin lo tienen activo con el secreto de demo `JBSWY3DPEHPK3PXP
 ## Estado
 - **Fase 0 (fundamentos y seguridad): completa.** Ver [`docs/architecture.md`](docs/architecture.md).
 - **Fase 1 (administrativo y turnos): completa.** Pacientes y anamnesis con alertas, catálogos, agenda sin solapes y con estados, recordatorios 48 h/24 h (canales simulados), caja con pagos mixtos, cierre ciego y factura electrónica XML con autorización simulada del SRI.
-- **Fase 2 (clínico): en curso.** Hecho: odontograma SVG (permanente/temporal, FDI/Universal, 5 superficies), periodontograma con NIC, notas SOEP inmutables con firma y adendas, y procedimientos realizados protegidos (RN-01). Pendiente: consentimiento informado, recetas en PDF y presupuestos (2.6–2.9).
+- **Fase 2 (clínico): completa.** Odontograma SVG, periodontograma con NIC, notas SOEP inmutables con firma y adendas, RN-01, consentimiento informado (firma en pantalla u OTP) con PDF, recetas en PDF con aviso de alergias y presupuestos por fases con aprobación parcial y paso a citas.
+- Siguiente: Fase 3 (inventario, liquidación de honorarios y reportes).

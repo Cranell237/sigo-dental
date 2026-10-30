@@ -3,6 +3,7 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { FILAS, PUNTOS_PERIO } from "../dental";
 import Odontograma, { type Hallazgo } from "./Odontograma";
+import { Consentimientos, Recetas } from "./Documentos";
 import { PasswordDialog } from "./PasswordDialog";
 import { AlertBadges } from "./Pacientes";
 
@@ -197,7 +198,7 @@ export default function Expediente() {
   const [q, setQ] = useState("");
   const [lista, setLista] = useState<PacienteMin[]>([]);
   const [paciente, setPaciente] = useState<PacienteMin | null>(null);
-  const [tab, setTab] = useState<"odontograma" | "periodontograma" | "notas">("odontograma");
+  const [tab, setTab] = useState<"odontograma" | "periodontograma" | "notas" | "consentimientos" | "recetas">("odontograma");
   const [hallazgos, setHallazgos] = useState<Hallazgo[]>([]);
   const [examenes, setExamenes] = useState<Examen[]>([]);
   const [notas, setNotas] = useState<Nota[]>([]);
@@ -239,7 +240,7 @@ export default function Expediente() {
     );
   }
 
-  const tabs = [["odontograma", "Odontograma"], ["periodontograma", "Periodontograma"], ["notas", "Notas SOEP"]] as const;
+  const tabs = [["odontograma", "Odontograma"], ["periodontograma", "Periodontograma"], ["notas", "Notas SOEP"], ["consentimientos", "Consentimientos"], ["recetas", "Recetas"]] as const;
   return (
     <section className="space-y-4">
       <button onClick={() => setPaciente(null)} className="text-sm text-sky-700">← Cambiar paciente</button>
@@ -254,6 +255,8 @@ export default function Expediente() {
       </nav>
       {tab === "odontograma" && <Odontograma pid={paciente.id} hallazgos={hallazgos} puedeEscribir={puedeEscribir} puedeFirmar={puedeFirmar} onChange={cargar} />}
       {tab === "periodontograma" && <Periodontograma pid={paciente.id} examenes={examenes} puedeEscribir={puedeEscribir} onChange={cargar} />}
+      {tab === "consentimientos" && <Consentimientos pid={paciente.id} puedeEscribir={puedeEscribir} />}
+      {tab === "recetas" && <Recetas pid={paciente.id} puedeFirmar={puedeFirmar} />}
       {tab === "notas" && <Notas pid={paciente.id} notas={notas} meId={me!.id} puedeEscribir={puedeEscribir} puedeFirmar={puedeFirmar} onChange={cargar} />}
     </section>
   );
