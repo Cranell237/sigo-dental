@@ -45,3 +45,97 @@ model RefreshToken {
 
   @@index([userId])
 }
+
+// ---------- Fase 1 ----------
+
+// RF-01: ficha única del paciente.
+model Patient {
+  id                 String   @id @default(cuid())
+  cedula             String   @unique
+  nombres            String
+  apellidos          String
+  fechaNacimiento    DateTime
+  sexo               String
+  telefono           String
+  email              String?
+  direccion          String?
+  emergenciaNombre   String
+  emergenciaTelefono String
+  tutorNombre        String? // obligatorio si es menor de edad
+  tutorCedula        String?
+  tutorTelefono      String?
+  seguro             String?
+  convenio           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  anamnesis    Anamnesis?
+  appointments Appointment[]
+}
+
+// RF-02: anamnesis obligatoria. `observaciones` se guarda cifrada (AES-256-GCM).
+model Anamnesis {
+  id            String   @id @default(cuid())
+  patientId     String   @unique
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  alergias      String // JSON: lista de alergias a fármacos
+  anticoagulado Boolean  @default(false)
+  coagulopatia  Boolean  @default(false)
+  enfermedades  String? // enfermedades sistémicas
+  cirugias      String? // antecedentes quirúrgicos
+  observaciones String?
+  updatedAt     DateTime @updatedAt
+}
+
+model Consultorio {
+  id       String   @id @default(cuid())
+  nombre   String   @unique
+  sillones Sillon[]
+}
+
+model Sillon {
+  id            String      @id @default(cuid())
+  consultorioId String
+  consultorio   Consultorio @relation(fields: [consultorioId], references: [id])
+  nombre        String
+
+  appointments Appointment[]
+
+  @@unique([consultorioId, nombre])
+}
+
+model Profesional {
+  id           String  @id @default(cuid())
+  userId       String? @unique
+  nombre       String
+  especialidad String
+
+  appointments Appointment[]
+}
+
+// Precio base en centavos (nunca float).
+model Procedimiento {
+  id         String @id @default(cuid())
+  codigo     String @unique
+  nombre     String
+  precioBase Int
+}
+
+// RF-09/10, RN-03.
+model Appointment {
+  id            String      @id @default(cuid())
+  patientId     String
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  profesionalId String
+  profesional   Profesional @relation(fields: [profesionalId], references: [id])
+  sillonId      String
+  sillon        Sillon      @relation(fields: [sillonId], references: [id])
+  inicio        DateTime
+  fin           DateTime
+  estado        String      @default("PROGRAMADO")
+  motivo        String?
+  createdAt     DateTime    @default(now())
+
+  @@index([sillonId, inicio])
+  @@index([inicio])
+}

@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { AuthProvider, useAuth } from "./auth";
+import Agenda from "./pages/Agenda";
 import Auditoria from "./pages/Auditoria";
+import Pacientes from "./pages/Pacientes";
 import Login from "./pages/Login";
 import MfaEnroll from "./pages/MfaEnroll";
 
 // Navegación por rol: cada sección exige un permiso del API (RNF-05, RNF-08).
 const SECTIONS = [
   { id: "pacientes", label: "Pacientes", perm: "pacientes:leer", phase: 1 },
-  { id: "agenda", label: "Agenda", perm: "agenda:gestionar", phase: 1 },
+  { id: "agenda", label: "Agenda", perm: "agenda:leer", phase: 1 },
   { id: "caja", label: "Caja", perm: "caja:gestionar", phase: 1 },
   { id: "clinico", label: "Expediente clínico", perm: "clinico:leer", phase: 2 },
   { id: "reportes", label: "Reportes", perm: "reportes:leer", phase: 3 },
@@ -75,7 +77,7 @@ function Shell() {
         </div>
       </aside>
       <main className="flex-1 p-4 md:p-8">
-        {current?.id === "auditoria" ? <Auditoria /> : current && <Placeholder key={current.id} {...current} />}
+        {current?.id === "auditoria" ? <Auditoria /> : current?.id === "pacientes" ? <Pacientes /> : current?.id === "agenda" ? <Agenda /> : current && <Placeholder key={current.id} {...current} />}
       </main>
     </div>
   );

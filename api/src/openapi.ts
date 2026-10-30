@@ -55,6 +55,44 @@ export const openapi = {
       },
     },
     "/api/auth/me": { get: { tags: ["Auth"], summary: "Usuario actual y permisos", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/pacientes": {
+      get: { tags: ["Pacientes"], summary: "Busca por cédula o nombre (?q=). Incluye alertas críticas.", security: bearer, responses: { 200: { description: "ok" } } },
+      post: {
+        tags: ["Pacientes"],
+        summary: "Alta con anamnesis obligatoria; los menores requieren tutor legal (RF-01, RF-02)",
+        security: bearer,
+        responses: { 201: { description: "Creado" }, 400: { description: "Datos inválidos" }, 409: { description: "Cédula duplicada" } },
+      },
+    },
+    "/api/pacientes/{id}": {
+      get: { tags: ["Pacientes"], summary: "Ficha; el detalle de anamnesis solo con acceso clínico", security: bearer, responses: { 200: { description: "ok" }, 404: { description: "No existe" } } },
+      patch: { tags: ["Pacientes"], summary: "Modifica datos demográficos", security: bearer, responses: { 200: { description: "ok" } } },
+    },
+    "/api/pacientes/{id}/anamnesis": {
+      put: { tags: ["Pacientes"], summary: "Actualiza la anamnesis", security: bearer, responses: { 200: { description: "ok" } } },
+    },
+    "/api/catalogos/consultorios": {
+      get: { tags: ["Catálogos"], summary: "Consultorios con sus sillones", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Catálogos"], summary: "Crea un consultorio (admin)", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/catalogos/consultorios/{id}/sillones": {
+      post: { tags: ["Catálogos"], summary: "Agrega un sillón (admin)", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/catalogos/profesionales": {
+      get: { tags: ["Catálogos"], summary: "Profesionales y especialidades", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Catálogos"], summary: "Crea un profesional (admin)", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/catalogos/procedimientos": {
+      get: { tags: ["Catálogos"], summary: "Procedimientos con precio base en centavos", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Catálogos"], summary: "Crea un procedimiento (admin)", security: bearer, responses: { 201: { description: "Creado" } } },
+    },
+    "/api/citas": {
+      get: { tags: ["Agenda"], summary: "Citas entre desde y hasta (día/semana), filtrables por sillón y profesional", security: bearer, responses: { 200: { description: "ok" } } },
+      post: { tags: ["Agenda"], summary: "Agenda una cita. 409 si el sillón está ocupado (RN-03)", security: bearer, responses: { 201: { description: "Creada" }, 409: { description: "Sillón ocupado" } } },
+    },
+    "/api/citas/{id}/estado": {
+      patch: { tags: ["Agenda"], summary: "Cambia el estado respetando las transiciones válidas (RF-10)", security: bearer, responses: { 200: { description: "ok" }, 409: { description: "Transición no permitida" } } },
+    },
     "/api/clinico": {
       get: {
         tags: ["Clínico"],

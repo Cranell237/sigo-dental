@@ -6,6 +6,9 @@ export type Permission =
   | "usuarios:gestionar"
   | "pacientes:leer"
   | "pacientes:escribir"
+  | "catalogos:leer"
+  | "catalogos:gestionar"
+  | "agenda:leer"
   | "agenda:gestionar"
   | "caja:gestionar"
   | "clinico:leer"
@@ -14,11 +17,11 @@ export type Permission =
   | "auditoria:leer";
 
 export const PERMISSIONS: Record<Role, Permission[]> = {
-  ADMIN: ["usuarios:gestionar", "auditoria:leer"],
-  ODONTOLOGO: ["pacientes:leer", "pacientes:escribir", "agenda:gestionar", "clinico:leer", "clinico:escribir"],
-  RECEPCIONISTA: ["pacientes:leer", "pacientes:escribir", "agenda:gestionar", "caja:gestionar"],
-  ASISTENTE: ["pacientes:leer", "clinico:leer", "clinico:escribir"],
-  AUDITOR: ["reportes:leer", "auditoria:leer"],
+  ADMIN: ["usuarios:gestionar", "auditoria:leer", "catalogos:leer", "catalogos:gestionar"],
+  ODONTOLOGO: ["pacientes:leer", "pacientes:escribir", "catalogos:leer", "agenda:leer", "agenda:gestionar", "clinico:leer", "clinico:escribir"],
+  RECEPCIONISTA: ["pacientes:leer", "pacientes:escribir", "catalogos:leer", "agenda:leer", "agenda:gestionar", "caja:gestionar"],
+  ASISTENTE: ["pacientes:leer", "catalogos:leer", "agenda:leer", "clinico:leer", "clinico:escribir"],
+  AUDITOR: ["reportes:leer", "auditoria:leer", "catalogos:leer"],
 };
 
 export const can = (role: Role, p: Permission) => PERMISSIONS[role].includes(p);

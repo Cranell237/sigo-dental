@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import swaggerUi from "swagger-ui-express";
 import { openapi } from "./openapi.js";
 import { authRouter } from "./routes/auth.js";
+import { pacientesRouter } from "./routes/pacientes.js";
+import { catalogosRouter } from "./routes/catalogos.js";
+import { citasRouter } from "./routes/citas.js";
 import { auditoriaRouter } from "./routes/auditoria.js";
 import { clinicoRouter } from "./routes/clinico.js";
 
@@ -21,6 +24,9 @@ export function createApp() {
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
   app.use("/api/auth", authRouter);
   app.use("/api/clinico", clinicoRouter);
+  app.use("/api/pacientes", pacientesRouter);
+  app.use("/api/catalogos", catalogosRouter);
+  app.use("/api/citas", citasRouter);
   app.use("/api/auditoria", auditoriaRouter);
 
   // En producción Express sirve el build de React (un solo servicio en Render).

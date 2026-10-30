@@ -23,4 +23,35 @@ for (const { mfa, ...u } of users) {
   await prisma.user.upsert({ where: { email: u.email }, update: mfaData, create: { ...u, passwordHash, ...mfaData } });
 }
 console.log(`Seed: ${users.length} usuarios`);
+
+// Catálogos y datos de demostración (Fase 1).
+const consultorio = await prisma.consultorio.upsert({ where: { nombre: "Consultorio 1" }, update: {}, create: { nombre: "Consultorio 1" } });
+for (const nombre of ["Sillón 1", "Sillón 2"]) {
+  await prisma.sillon.upsert({ where: { consultorioId_nombre: { consultorioId: consultorio.id, nombre } }, update: {}, create: { nombre, consultorioId: consultorio.id } });
+}
+const odonto = await prisma.user.findUniqueOrThrow({ where: { email: "odontologo@sigo.test" } });
+await prisma.profesional.upsert({
+  where: { userId: odonto.id },
+  update: {},
+  create: { userId: odonto.id, nombre: "Dr. Odontólogo Demo", especialidad: "Odontología general" },
+});
+const procedimientos = [
+  { codigo: "CONS", nombre: "Consulta y diagnóstico", precioBase: 1500 },
+  { codigo: "PROF", nombre: "Profilaxis dental", precioBase: 3500 },
+  { codigo: "REST", nombre: "Restauración con resina", precioBase: 4500 },
+  { codigo: "ENDO", nombre: "Endodoncia unirradicular", precioBase: 12000 },
+  { codigo: "EXOD", nombre: "Exodoncia simple", precioBase: 3000 },
+];
+for (const p of procedimientos) await prisma.procedimiento.upsert({ where: { codigo: p.codigo }, update: {}, create: p });
+
+const pacientes = [
+  { cedula: "1710000001", nombres: "María", apellidos: "Andrade", fechaNacimiento: new Date("1988-03-14"), sexo: "F", telefono: "0991111111", emergenciaNombre: "Luis Andrade", emergenciaTelefono: "0992222222", alergias: ["Penicilina"], anticoagulado: false },
+  { cedula: "1710000002", nombres: "Carlos", apellidos: "Benítez", fechaNacimiento: new Date("1955-11-02"), sexo: "M", telefono: "0993333333", emergenciaNombre: "Ana Benítez", emergenciaTelefono: "0994444444", alergias: [], anticoagulado: true },
+  { cedula: "1710000003", nombres: "Sofía", apellidos: "Cevallos", fechaNacimiento: new Date("2016-06-20"), sexo: "F", telefono: "0995555555", emergenciaNombre: "Pedro Cevallos", emergenciaTelefono: "0996666666", tutorNombre: "Pedro Cevallos", tutorCedula: "1710000099", tutorTelefono: "0996666666", alergias: [], anticoagulado: false },
+];
+for (const { alergias, anticoagulado, ...p } of pacientes) {
+  if (await prisma.patient.findUnique({ where: { cedula: p.cedula } })) continue;
+  await prisma.patient.create({ data: { ...p, anamnesis: { create: { alergias: JSON.stringify(alergias), anticoagulado } } } });
+}
+console.log("Seed: catálogos y pacientes de demostración");
 await prisma.$disconnect();
