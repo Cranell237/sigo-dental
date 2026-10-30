@@ -216,3 +216,80 @@ model Recordatorio {
 
   @@unique([appointmentId, tipo])
 }
+
+// ---------- Fase 2: expediente clínico ----------
+
+// RF-03 / RN-01: hallazgos del odontograma. Un hallazgo REALIZADO no se modifica ni se borra
+// (triggers en la migración); las correcciones se hacen con una Adenda firmada.
+model Hallazgo {
+  id             String    @id @default(cuid())
+  patientId      String
+  diente         String // numeración FDI
+  superficie     String? // M | D | O | V | L; null = diente completo
+  tipo           String
+  estado         String // EXISTENTE | REQUERIDO | REALIZADO
+  nota           String?
+  creadoPorId    String
+  createdAt      DateTime  @default(now())
+  realizadoAt    DateTime?
+  realizadoPorId String?
+
+  adendas Adenda[]
+
+  @@index([patientId])
+}
+
+// RF-05: nota de evolución SOEP. Los cuatro campos se guardan cifrados.
+model NotaSoep {
+  id            String    @id @default(cuid())
+  patientId     String
+  appointmentId String?
+  autorId       String
+  subjetivo     String
+  objetivo      String
+  evaluacion    String
+  plan          String
+  createdAt     DateTime  @default(now())
+  firmadaAt     DateTime?
+  firmadaPorId  String?
+  firmaHash     String?
+
+  adendas Adenda[]
+
+  @@index([patientId, createdAt])
+}
+
+// Corrección firmada de una nota o de un hallazgo. Solo inserción.
+model Adenda {
+  id         String    @id @default(cuid())
+  notaId     String?
+  nota       NotaSoep? @relation(fields: [notaId], references: [id])
+  hallazgoId String?
+  hallazgo   Hallazgo? @relation(fields: [hallazgoId], references: [id])
+  texto      String
+  autorId    String
+  firmaHash  String
+  createdAt  DateTime  @default(now())
+}
+
+// RF-04: cada examen periodontal es un registro nuevo (no se edita). `puntos` es JSON con 6 sitios por diente.
+model PerioExamen {
+  id        String   @id @default(cuid())
+  patientId String
+  autorId   String
+  createdAt DateTime @default(now())
+
+  dientes PerioDiente[]
+
+  @@index([patientId, createdAt])
+}
+
+model PerioDiente {
+  id        String      @id @default(cuid())
+  examenId  String
+  examen    PerioExamen @relation(fields: [examenId], references: [id])
+  diente    String
+  puntos    String
+  furca     Int         @default(0)
+  movilidad Int         @default(0)
+}

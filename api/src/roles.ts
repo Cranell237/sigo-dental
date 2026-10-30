@@ -13,12 +13,13 @@ export type Permission =
   | "caja:gestionar"
   | "clinico:leer"
   | "clinico:escribir"
+  | "clinico:firmar"
   | "reportes:leer"
   | "auditoria:leer";
 
 export const PERMISSIONS: Record<Role, Permission[]> = {
   ADMIN: ["usuarios:gestionar", "auditoria:leer", "catalogos:leer", "catalogos:gestionar"],
-  ODONTOLOGO: ["pacientes:leer", "pacientes:escribir", "catalogos:leer", "agenda:leer", "agenda:gestionar", "clinico:leer", "clinico:escribir"],
+  ODONTOLOGO: ["pacientes:leer", "pacientes:escribir", "catalogos:leer", "agenda:leer", "agenda:gestionar", "clinico:leer", "clinico:escribir", "clinico:firmar"],
   RECEPCIONISTA: ["pacientes:leer", "pacientes:escribir", "catalogos:leer", "agenda:leer", "agenda:gestionar", "caja:gestionar"],
   ASISTENTE: ["pacientes:leer", "catalogos:leer", "agenda:leer", "clinico:leer", "clinico:escribir"],
   AUDITOR: ["reportes:leer", "auditoria:leer", "catalogos:leer"],

@@ -51,7 +51,7 @@ export const auditAccess = (resource: string) => (req: Request, res: Response, n
   res.on("finish", () => {
     if (res.statusCode >= 400) return;
     const action = req.method === "GET" ? "READ" : req.method === "POST" ? "CREATE" : req.method === "DELETE" ? "DELETE" : "UPDATE";
-    recordAudit({ userId: req.user?.id, action, resource, resourceId: req.params.id, ip: req.ip }).catch((err) =>
+    recordAudit({ userId: req.user?.id, action, resource, resourceId: req.params.id ?? req.originalUrl.split("?")[0].slice(0, 200), ip: req.ip }).catch((err) =>
       console.error("Fallo al registrar auditoría", err),
     );
   });

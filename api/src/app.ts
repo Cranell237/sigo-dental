@@ -12,6 +12,7 @@ import { citasRouter } from "./routes/citas.js";
 import { cajaRouter } from "./routes/caja.js";
 import { recordatoriosRouter } from "./routes/recordatorios.js";
 import { auditoriaRouter } from "./routes/auditoria.js";
+import { expedienteRouter } from "./routes/expediente.js";
 import { clinicoRouter } from "./routes/clinico.js";
 
 export function createApp() {
@@ -25,6 +26,7 @@ export function createApp() {
 
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
   app.use("/api/auth", authRouter);
+  app.use("/api/clinico/pacientes", expedienteRouter);
   app.use("/api/clinico", clinicoRouter);
   app.use("/api/pacientes", pacientesRouter);
   app.use("/api/catalogos", catalogosRouter);
