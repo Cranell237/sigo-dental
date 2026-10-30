@@ -63,5 +63,30 @@ for (const proc of await prisma.procedimiento.findMany()) {
   if (await prisma.consentimientoPlantilla.findFirst({ where: { procedimientoId: proc.id } })) continue;
   await prisma.consentimientoPlantilla.create({ data: { procedimientoId: proc.id, titulo: `Consentimiento informado — ${proc.nombre}`, texto: TEXTO(proc.nombre) } });
 }
-console.log("Seed: catálogos, pacientes y plantillas de demostración");
+// Inventario de demostración (Fase 3): insumos, receta de consumo y stock en el Consultorio 1.
+const insumosDemo = [
+  { codigo: "RES-A2", nombre: "Resina compuesta A2", unidad: "g", stockMinimo: 5, costoUnitario: 150 },
+  { codigo: "ANE-LID", nombre: "Anestesia lidocaína 2%", unidad: "carpule", stockMinimo: 10, costoUnitario: 120 },
+  { codigo: "GUA-M", nombre: "Guantes de nitrilo", unidad: "par", stockMinimo: 20, costoUnitario: 25 },
+];
+for (const i of insumosDemo) await prisma.insumo.upsert({ where: { codigo: i.codigo }, update: {}, create: i });
+const rest = await prisma.procedimiento.findUniqueOrThrow({ where: { codigo: "REST" } });
+for (const [codigo, cantidad] of [["RES-A2", 2], ["ANE-LID", 1], ["GUA-M", 1]] as const) {
+  const insumo = await prisma.insumo.findUniqueOrThrow({ where: { codigo } });
+  await prisma.recetaConsumo.upsert({ where: { procedimientoId_insumoId: { procedimientoId: rest.id, insumoId: insumo.id } }, update: {}, create: { procedimientoId: rest.id, insumoId: insumo.id, cantidad } });
+}
+if ((await prisma.loteInsumo.count({ where: { consultorioId: consultorio.id } })) === 0) {
+  const admin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@sigo.test" } });
+  for (const [codigo, cantidad] of [["RES-A2", 30], ["ANE-LID", 40], ["GUA-M", 100]] as const) {
+    const insumo = await prisma.insumo.findUniqueOrThrow({ where: { codigo } });
+    const lote = await prisma.loteInsumo.create({ data: { insumoId: insumo.id, consultorioId: consultorio.id, lote: "L-INICIAL", vence: new Date(Date.now() + 365 * 864e5), cantidad } });
+    await prisma.movimientoInventario.create({ data: { insumoId: insumo.id, consultorioId: consultorio.id, loteId: lote.id, tipo: "ENTRADA", cantidad, motivo: "Stock inicial de demostración", userId: admin.id } });
+  }
+}
+// Regla de honorarios de demostración: 40 % del precio para el odontólogo.
+const profDemo = await prisma.profesional.findFirstOrThrow();
+if (!(await prisma.reglaHonorario.findFirst({ where: { profesionalId: profDemo.id, procedimientoId: null } }))) {
+  await prisma.reglaHonorario.create({ data: { profesionalId: profDemo.id, modalidad: "PORCENTAJE", valor: 4000 } });
+}
+console.log("Seed: catálogos, pacientes, plantillas e inventario de demostración");
 await prisma.$disconnect();

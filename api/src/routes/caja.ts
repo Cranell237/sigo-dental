@@ -3,12 +3,13 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { auditAccess } from "../audit.js";
 import { authenticate, requirePermission } from "../middleware/auth.js";
+import { pasarela } from "../pasarela.js";
 import { buildFacturaXml, claveAcceso, sri } from "../sri.js";
 
 export const cajaRouter = Router();
 cajaRouter.use(authenticate, requirePermission("caja:gestionar"), auditAccess("caja"));
 
-const METODOS = ["EFECTIVO", "TARJETA_CREDITO", "TARJETA_DEBITO", "TRANSFERENCIA", "SEGURO"] as const;
+const METODOS = ["EFECTIVO", "TARJETA_CREDITO", "TARJETA_DEBITO", "TRANSFERENCIA", "SEGURO", "PASARELA"] as const;
 
 class Regla extends Error {
   constructor(message: string, public status = 409) {
@@ -40,7 +41,7 @@ cajaRouter.get("/turno", async (req, res) => {
 const cobroSchema = z.object({
   patientId: z.string(),
   lineas: z.array(z.object({ procedimientoId: z.string(), cantidad: z.number().int().positive() })).min(1),
-  pagos: z.array(z.object({ metodo: z.enum(METODOS), monto: z.number().int().positive(), referencia: z.string().optional() })).min(1),
+  pagos: z.array(z.object({ metodo: z.enum(METODOS), monto: z.number().int().positive(), referencia: z.string().optional(), token: z.string().optional() })).min(1),
   facturar: z.boolean().default(true),
 });
 
@@ -56,20 +57,35 @@ cajaRouter.post("/cobros", async (req, res) => {
   if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
 
   const procs = await prisma.procedimiento.findMany({ where: { id: { in: p.data.lineas.map((l) => l.procedimientoId) } } });
+  if (p.data.lineas.some((l) => !procs.some((x) => x.id === l.procedimientoId))) return res.status(404).json({ error: "Procedimiento inexistente" });
   const lineas = p.data.lineas.map((l) => {
-    const proc = procs.find((x) => x.id === l.procedimientoId);
-    if (!proc) throw new Regla("Procedimiento inexistente", 404);
+    const proc = procs.find((x) => x.id === l.procedimientoId)!;
     return { procedimientoId: proc.id, descripcion: proc.nombre, cantidad: l.cantidad, precioUnitario: proc.precioBase };
   });
   const total = lineas.reduce((s, l) => s + l.cantidad * l.precioUnitario, 0);
   const pagado = p.data.pagos.reduce((s, x) => s + x.monto, 0);
 
+  // Pagos por pasarela: se cobran primero y, si algo falla después, se reversan.
+  const aprobadas: string[] = [];
   try {
     if (pagado !== total) throw new Regla(`Los pagos (${pagado}) deben sumar exactamente el total (${total}) en centavos`, 400);
 
+    const pagosDb: { metodo: string; monto: number; referencia?: string }[] = [];
+    for (const pago of p.data.pagos) {
+      if (pago.metodo !== "PASARELA") {
+        pagosDb.push({ metodo: pago.metodo, monto: pago.monto, referencia: pago.referencia });
+        continue;
+      }
+      if (!pago.token) throw new Regla("El pago por pasarela requiere un token de pago", 400);
+      const r = await pasarela.cobrar({ monto: pago.monto, token: pago.token, referencia: `turno-${turno.id}` });
+      if (!r.aprobado) throw new Regla(`Pago rechazado por la pasarela: ${r.motivo}`, 402);
+      aprobadas.push(r.transaccionId);
+      pagosDb.push({ metodo: pago.metodo, monto: pago.monto, referencia: r.transaccionId });
+    }
+
     const cobro = await prisma.$transaction(async (tx) => {
       const c = await tx.cobro.create({
-        data: { turnoId: turno.id, patientId: patient.id, total, lineas: { create: lineas }, pagos: { create: p.data.pagos } },
+        data: { turnoId: turno.id, patientId: patient.id, total, lineas: { create: lineas }, pagos: { create: pagosDb } },
       });
       if (p.data.facturar) {
         const ultimo = await tx.factura.aggregate({ _max: { secuencial: true } });
@@ -77,7 +93,7 @@ cajaRouter.post("/cobros", async (req, res) => {
         const fecha = new Date();
         const clave = claveAcceso(fecha, secuencial);
         const xml = buildFacturaXml(
-          { secuencial, fecha, comprador: { cedula: patient.cedula, nombre: `${patient.nombres} ${patient.apellidos}` }, detalles: lineas, pagos: p.data.pagos, total },
+          { secuencial, fecha, comprador: { cedula: patient.cedula, nombre: `${patient.nombres} ${patient.apellidos}` }, detalles: lineas, pagos: pagosDb, total },
           clave,
         );
         const auth = await sri.autorizar(clave, xml);
@@ -89,6 +105,7 @@ cajaRouter.post("/cobros", async (req, res) => {
     });
     res.status(201).json(await prisma.cobro.findUnique({ where: { id: cobro.id }, include: includeCobro }));
   } catch (e) {
+    await Promise.all(aprobadas.map((t) => pasarela.reversar(t)));
     if (e instanceof Regla) return res.status(e.status).json({ error: e.message });
     throw e;
   }

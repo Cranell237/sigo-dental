@@ -6,6 +6,7 @@ import { prisma } from "../db.js";
 import { auditAccess } from "../audit.js";
 import { config } from "../config.js";
 import { decrypt, encrypt } from "../crypto.js";
+import { descontarReceta, StockInsuficiente } from "../inventario.js";
 import { DIENTES, ESTADOS_HALLAZGO, POR_SUPERFICIE, PUNTOS_PERIO, SUPERFICIES, TIPOS_HALLAZGO } from "../dental.js";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 
@@ -81,11 +82,56 @@ expedienteRouter.delete("/:pid/hallazgos/:hid", escribir, async (req, res) => {
   res.status(204).end();
 });
 
+const realizarSchema = z.object({
+  // Con procedimientoId se descuentan los insumos de su receta de consumo y queda listo para liquidar honorarios.
+  procedimientoId: z.string().optional(),
+  consultorioId: z.string().optional(),
+  costoLaboratorio: z.number().int().min(0).default(0),
+});
+
+// RF-14: marcar como realizado y descontar insumos es una sola transacción: si falta stock no queda a medias.
 expedienteRouter.post("/:pid/hallazgos/:hid/realizar", firmar, async (req, res) => {
+  const p = realizarSchema.safeParse(req.body ?? {});
+  if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+  if (p.data.procedimientoId && !p.data.consultorioId) return res.status(400).json({ error: "Indica el consultorio para descontar los insumos" });
   const h = await hallazgoDe(req);
   if (!h) return res.status(404).json({ error: "Hallazgo no encontrado" });
   if (h.estado !== "REQUERIDO") return res.status(409).json({ error: "Solo un hallazgo REQUERIDO puede marcarse como realizado" });
-  res.json(await prisma.hallazgo.update({ where: { id: h.id }, data: { estado: "REALIZADO", realizadoAt: new Date(), realizadoPorId: req.user!.id } }));
+  const proc = p.data.procedimientoId ? await prisma.procedimiento.findUnique({ where: { id: p.data.procedimientoId } }) : null;
+  if (p.data.procedimientoId && !proc) return res.status(404).json({ error: "Procedimiento no existe en el catálogo" });
+  if (p.data.consultorioId && !(await prisma.consultorio.findUnique({ where: { id: p.data.consultorioId } }))) return res.status(404).json({ error: "Consultorio no existe" });
+
+  try {
+    const ahora = new Date();
+    const realizado = await prisma.$transaction(async (tx) => {
+      const actualizado = await tx.hallazgo.update({
+        where: { id: h.id },
+        data: { estado: "REALIZADO", realizadoAt: ahora, realizadoPorId: req.user!.id, procedimientoId: proc?.id },
+      });
+      if (proc) {
+        const { costoMateriales } = await descontarReceta(tx, { procedimientoId: proc.id, consultorioId: p.data.consultorioId!, hallazgoId: h.id, userId: req.user!.id });
+        const profesional = await tx.profesional.findUnique({ where: { userId: req.user!.id } });
+        await tx.procedimientoRealizado.create({
+          data: {
+            hallazgoId: h.id,
+            patientId: h.patientId,
+            profesionalId: profesional?.id,
+            procedimientoId: proc.id,
+            consultorioId: p.data.consultorioId,
+            precio: proc.precioBase,
+            costoMateriales,
+            costoLaboratorio: p.data.costoLaboratorio,
+            realizadoAt: ahora,
+          },
+        });
+      }
+      return actualizado;
+    });
+    res.json(realizado);
+  } catch (e) {
+    if (e instanceof StockInsuficiente) return res.status(409).json({ error: e.message, code: "STOCK_INSUFICIENTE", faltantes: e.faltantes });
+    throw e;
+  }
 });
 
 const adendaSchema = password.extend({ texto: z.string().trim().min(5) });

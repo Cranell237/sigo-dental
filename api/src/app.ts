@@ -15,6 +15,9 @@ import { auditoriaRouter } from "./routes/auditoria.js";
 import { consentimientosRouter } from "./routes/consentimientos.js";
 import { recetasRouter } from "./routes/recetas.js";
 import { presupuestosRouter } from "./routes/presupuestos.js";
+import { inventarioRouter } from "./routes/inventario.js";
+import { honorariosRouter } from "./routes/honorarios.js";
+import { reportesRouter } from "./routes/reportes.js";
 import { expedienteRouter } from "./routes/expediente.js";
 import { clinicoRouter } from "./routes/clinico.js";
 
@@ -30,6 +33,9 @@ export function createApp() {
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
   app.use("/api/auth", authRouter);
   app.use("/api/clinico/pacientes", expedienteRouter);
+  app.use("/api/inventario", inventarioRouter);
+  app.use("/api/honorarios", honorariosRouter);
+  app.use("/api/reportes", reportesRouter);
   app.use("/api/consentimientos", consentimientosRouter);
   app.use("/api/recetas", recetasRouter);
   app.use("/api/presupuestos", presupuestosRouter);

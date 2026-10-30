@@ -222,17 +222,18 @@ model Recordatorio {
 // RF-03 / RN-01: hallazgos del odontograma. Un hallazgo REALIZADO no se modifica ni se borra
 // (triggers en la migración); las correcciones se hacen con una Adenda firmada.
 model Hallazgo {
-  id             String    @id @default(cuid())
-  patientId      String
-  diente         String // numeración FDI
-  superficie     String? // M | D | O | V | L; null = diente completo
-  tipo           String
-  estado         String // EXISTENTE | REQUERIDO | REALIZADO
-  nota           String?
-  creadoPorId    String
-  createdAt      DateTime  @default(now())
-  realizadoAt    DateTime?
-  realizadoPorId String?
+  id              String    @id @default(cuid())
+  patientId       String
+  diente          String // numeración FDI
+  superficie      String? // M | D | O | V | L; null = diente completo
+  tipo            String
+  estado          String // EXISTENTE | REQUERIDO | REALIZADO
+  nota            String?
+  creadoPorId     String
+  createdAt       DateTime  @default(now())
+  realizadoAt     DateTime?
+  realizadoPorId  String?
+  procedimientoId String? // procedimiento del catálogo con el que se realizó (descargo de insumos y honorarios)
 
   adendas Adenda[]
 
@@ -368,4 +369,107 @@ model PresupuestoItem {
   costoLaboratorio Int         @default(0)
   estado           String      @default("PENDIENTE") // PENDIENTE | APROBADO | RECHAZADO | AGENDADO
   appointmentId    String?
+}
+
+// ---------- Fase 3: inventario, honorarios y reportes ----------
+
+model Insumo {
+  id            String @id @default(cuid())
+  codigo        String @unique
+  nombre        String
+  unidad        String // pieza, ml, g…
+  stockMinimo   Int    @default(0)
+  costoUnitario Int    @default(0) // centavos por unidad
+}
+
+// Stock por consultorio y lote. `cantidad` es el saldo actual; los cambios quedan en MovimientoInventario.
+model LoteInsumo {
+  id            String    @id @default(cuid())
+  insumoId      String
+  consultorioId String
+  lote          String
+  vence         DateTime?
+  cantidad      Int
+  createdAt     DateTime  @default(now())
+
+  @@unique([insumoId, consultorioId, lote])
+  @@index([insumoId, consultorioId])
+}
+
+// Bitácora de movimientos: solo inserción.
+model MovimientoInventario {
+  id            String   @id @default(cuid())
+  insumoId      String
+  consultorioId String
+  loteId        String?
+  tipo          String // ENTRADA | SALIDA | AJUSTE
+  cantidad      Int // positiva; el tipo indica el sentido (en AJUSTE, la diferencia con signo va en `motivo`)
+  motivo        String
+  hallazgoId    String? // procedimiento que originó un descargo automático
+  userId        String
+  createdAt     DateTime @default(now())
+
+  @@index([insumoId, consultorioId])
+}
+
+// RF-14: receta estándar de consumo por procedimiento.
+model RecetaConsumo {
+  id              String @id @default(cuid())
+  procedimientoId String
+  insumoId        String
+  cantidad        Int
+
+  @@unique([procedimientoId, insumoId])
+}
+
+// RF-13: regla de honorarios. valor = puntos básicos (4000 = 40,00 %) o centavos según la modalidad.
+model ReglaHonorario {
+  id              String  @id @default(cuid())
+  profesionalId   String
+  procedimientoId String? // nulo = regla general del profesional
+  modalidad       String // PORCENTAJE | MONTO_FIJO | PORCENTAJE_NETO
+  valor           Int
+
+  @@index([profesionalId])
+}
+
+// Instantánea inmutable de lo realizado (precio y costos al momento), base de la liquidación.
+model ProcedimientoRealizado {
+  id               String   @id @default(cuid())
+  hallazgoId       String   @unique
+  patientId        String
+  profesionalId    String?
+  procedimientoId  String
+  consultorioId    String?
+  precio           Int
+  costoMateriales  Int      @default(0)
+  costoLaboratorio Int      @default(0)
+  realizadoAt      DateTime
+  liquidacionId    String?
+
+  @@index([profesionalId, realizadoAt])
+}
+
+model Liquidacion {
+  id            String   @id @default(cuid())
+  profesionalId String
+  desde         DateTime
+  hasta         DateTime
+  total         Int
+  creadaPorId   String
+  createdAt     DateTime @default(now())
+
+  lineas LiquidacionLinea[]
+}
+
+model LiquidacionLinea {
+  id            String      @id @default(cuid())
+  liquidacionId String
+  liquidacion   Liquidacion @relation(fields: [liquidacionId], references: [id])
+  realizadoId   String
+  descripcion   String
+  base          Int
+  modalidad     String
+  valor         Int
+  comision      Int
 }
