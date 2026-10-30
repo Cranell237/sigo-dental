@@ -29,6 +29,17 @@ Integraciones externas (SRI, WhatsApp, pasarela de pagos): cada una detrás de u
 
 Pendiente de la propuesta anterior (descartado por complejidad): NestJS, PostgreSQL, Redis, MinIO, Docker Compose, microservicios.
 
+## Despliegue en Render
+
+El stack **no cambia**; solo se acomoda la forma de desplegarlo:
+
+- **Un solo Web Service**: en producción Express sirve el build de React (`web/dist`) y el API bajo `/api`. Una URL, sin CORS, un solo servicio gratuito.
+- **TLS**: Render lo entrega por defecto (cubre la parte de HTTPS de RNF-04; no hay que configurar proxy).
+- **SQLite en Render**: el disco del plan gratuito es efímero (se borra en cada deploy/reinicio). Como es una demo, la app ejecuta `prisma migrate deploy` + `seed` al arrancar, así que siempre hay datos de prueba. Si se quiere persistencia real: Render Postgres (cambiar `provider` en `schema.prisma`) o un Persistent Disk (de pago).
+- **`uploads/` y `node-cron`**: también son efímeros / se duermen con el servicio gratuito (se duerme tras 15 min sin tráfico). Para la demo los recordatorios se pueden disparar manualmente desde un endpoint de administración.
+- **Variables de entorno** (`JWT_SECRET`, `ENCRYPTION_KEY`, etc.) se configuran en el panel de Render; `render.yaml` en la raíz define el servicio (Infrastructure as Code).
+- Scripts requeridos en la raíz: `build` (instala, compila web y api, `prisma generate`) y `start` (migra, siembra, arranca).
+
 ## Flujo de trabajo con las skills `vibe`
 
 Instaladas en `.claude/skills/`. Ciclo por cada fase:

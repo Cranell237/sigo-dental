@@ -9,5 +9,8 @@ Sistema Integral de Gestión Odontológica y Expediente Clínico Digital (proyec
 ## Stack
 React + Vite + TypeScript + Tailwind · Node.js + Express + TypeScript · SQLite + Prisma
 
+## Despliegue
+Render (un solo Web Service; Express sirve el API y el build de React). Ver la sección "Despliegue en Render" del plan.
+
 ## Estado
 Fase 0 (fundamentos) pendiente. TODO: instrucciones de instalación y ejecución cuando exista el código.
