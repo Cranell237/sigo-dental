@@ -3,6 +3,8 @@ import cors from "cors";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { authRouter } from "./routes/auth.js";
+import { clinicoRouter } from "./routes/clinico.js";
 
 export function createApp() {
   const app = express();
@@ -12,6 +14,9 @@ export function createApp() {
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
+
+  app.use("/api/auth", authRouter);
+  app.use("/api/clinico", clinicoRouter);
 
   // En producción Express sirve el build de React (un solo servicio en Render).
   const here = path.dirname(fileURLToPath(import.meta.url));
