@@ -1,0 +1,5314 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SIGO-Dental API",
+    "version": "1.0.0",
+    "description": "API REST del Sistema Integral de Gestión Odontológica y Expediente Clínico Digital.\n\n**Autenticación:** `POST /api/auth/login` (correo y contraseña). Los roles clínicos y financieros tienen MFA obligatorio: el login devuelve `mfaRequired` y un `mfaToken`, y la sesión se obtiene con `POST /api/auth/login/mfa` y el código TOTP. Las demás rutas usan `Authorization: Bearer <token>`.\n\n**Convenciones:** importes en **centavos** (enteros), porcentajes de honorarios en **puntos básicos**, fechas ISO-8601 en UTC, dientes en numeración **FDI**. Los errores devuelven `{ \"error\": \"…\" }`.\n\n**Roles:** ADMIN, ODONTOLOGO, RECEPCIONISTA, ASISTENTE, AUDITOR. Cada operación indica el permiso requerido; sin él responde 403.\n\n**Auditoría:** todo acceso a datos clínicos, pacientes, caja, inventario y reportes queda en un log inmutable con hash encadenado.",
+    "contact": {
+      "name": "SIGO-Dental",
+      "url": "https://github.com/Cranell237/sigo-dental"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Este servidor"
+    },
+    {
+      "url": "https://sigo-dental-iyr0.onrender.com",
+      "description": "Producción (Render)"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Sistema"
+    },
+    {
+      "name": "Auth",
+      "description": "Login, MFA TOTP y sesión (RNF-05)"
+    },
+    {
+      "name": "Pacientes",
+      "description": "Ficha única y anamnesis (RF-01, RF-02)"
+    },
+    {
+      "name": "Catálogos",
+      "description": "Consultorios, sillones, profesionales y procedimientos"
+    },
+    {
+      "name": "Agenda",
+      "description": "Citas, estados y recordatorios (RF-09, RF-10, RF-11, RN-03)"
+    },
+    {
+      "name": "Caja",
+      "description": "Cobros, cierre ciego, facturación y pasarela (RF-12, RN-02)"
+    },
+    {
+      "name": "Expediente",
+      "description": "Odontograma, periodontograma y notas SOEP (RF-03, RF-04, RF-05, RN-01)"
+    },
+    {
+      "name": "Consentimientos",
+      "description": "Consentimiento informado digital (RF-06)"
+    },
+    {
+      "name": "Recetas"
+    },
+    {
+      "name": "Presupuestos",
+      "description": "Presupuestos por fases y aprobación (RF-07, RF-08)"
+    },
+    {
+      "name": "Inventario",
+      "description": "Insumos, lotes y descargo automático (RF-14)"
+    },
+    {
+      "name": "Honorarios",
+      "description": "Liquidación de honorarios (RF-13)"
+    },
+    {
+      "name": "Reportes"
+    },
+    {
+      "name": "Auditoría",
+      "description": "Log inmutable (RNF-06)"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Sin permiso"
+          },
+          "code": {
+            "type": "string",
+            "description": "Código de negocio opcional (MFA_REQUIRED, ALERGIA, STOCK_INSUFICIENTE)"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Rol": {
+        "type": "string",
+        "enum": [
+          "ADMIN",
+          "ODONTOLOGO",
+          "RECEPCIONISTA",
+          "ASISTENTE",
+          "AUDITOR"
+        ]
+      },
+      "Usuario": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Rol"
+          }
+        }
+      },
+      "Sesion": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "JWT de acceso (5 min). Enviar como `Authorization: Bearer <token>`."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Token opaco y rotativo; expira tras 15 min de inactividad."
+          },
+          "user": {
+            "$ref": "#/components/schemas/Usuario"
+          },
+          "mfaEnrollRequired": {
+            "type": "boolean",
+            "description": "true si el rol exige MFA y aún no lo activó: solo puede enrolarse."
+          }
+        },
+        "required": [
+          "token",
+          "refreshToken",
+          "user"
+        ]
+      },
+      "DesafioMfa": {
+        "type": "object",
+        "properties": {
+          "mfaRequired": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "mfaToken": {
+            "type": "string",
+            "description": "Token temporal (5 min) para el paso 2."
+          }
+        },
+        "required": [
+          "mfaRequired",
+          "mfaToken"
+        ]
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Rol"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mfaEnabled": {
+            "type": "boolean"
+          },
+          "mfaVerified": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AnamnesisEntrada": {
+        "type": "object",
+        "properties": {
+          "alergias": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Alergias a fármacos; lista vacía si no tiene.",
+            "example": [
+              "Penicilina"
+            ]
+          },
+          "anticoagulado": {
+            "type": "boolean"
+          },
+          "coagulopatia": {
+            "type": "boolean"
+          },
+          "enfermedades": {
+            "type": "string",
+            "description": "Enfermedades sistémicas"
+          },
+          "cirugias": {
+            "type": "string",
+            "description": "Antecedentes quirúrgicos"
+          },
+          "observaciones": {
+            "type": "string",
+            "description": "Se guarda cifrada (AES-256-GCM)"
+          }
+        },
+        "required": [
+          "alergias",
+          "anticoagulado",
+          "coagulopatia"
+        ]
+      },
+      "PacienteEntrada": {
+        "type": "object",
+        "properties": {
+          "cedula": {
+            "type": "string",
+            "example": "1712345678"
+          },
+          "nombres": {
+            "type": "string",
+            "example": "Ana"
+          },
+          "apellidos": {
+            "type": "string",
+            "example": "Pérez"
+          },
+          "fechaNacimiento": {
+            "type": "string",
+            "format": "date",
+            "example": "1990-05-10"
+          },
+          "sexo": {
+            "type": "string",
+            "enum": [
+              "F",
+              "M",
+              "O"
+            ]
+          },
+          "telefono": {
+            "type": "string",
+            "example": "0991234567"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "direccion": {
+            "type": "string"
+          },
+          "emergenciaNombre": {
+            "type": "string"
+          },
+          "emergenciaTelefono": {
+            "type": "string"
+          },
+          "tutorNombre": {
+            "type": "string",
+            "description": "Obligatorio (con cédula y teléfono) si el paciente es menor de edad"
+          },
+          "tutorCedula": {
+            "type": "string"
+          },
+          "tutorTelefono": {
+            "type": "string"
+          },
+          "seguro": {
+            "type": "string"
+          },
+          "convenio": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cedula",
+          "nombres",
+          "apellidos",
+          "fechaNacimiento",
+          "sexo",
+          "telefono",
+          "emergenciaNombre",
+          "emergenciaTelefono"
+        ]
+      },
+      "PacienteNuevo": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PacienteEntrada"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "anamnesis": {
+                "$ref": "#/components/schemas/AnamnesisEntrada"
+              }
+            },
+            "required": [
+              "anamnesis"
+            ]
+          }
+        ]
+      },
+      "Paciente": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PacienteEntrada"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "esMenor": {
+                "type": "boolean"
+              },
+              "alertas": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Alertas críticas para el badge (RF-02)",
+                "example": [
+                  "Alergia: Penicilina",
+                  "Anticoagulado"
+                ]
+              },
+              "anamnesis": {
+                "$ref": "#/components/schemas/AnamnesisEntrada",
+                "description": "Solo para roles con acceso clínico"
+              }
+            }
+          }
+        ]
+      },
+      "Consultorio": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "sillones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "nombre": {
+                  "type": "string"
+                },
+                "consultorioId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Profesional": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "especialidad": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Procedimiento": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "codigo": {
+            "type": "string",
+            "example": "REST"
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Restauración con resina"
+          },
+          "precioBase": {
+            "type": "integer",
+            "description": "Precio base en centavos",
+            "minimum": 0,
+            "example": 4500
+          }
+        }
+      },
+      "EstadoCita": {
+        "type": "string",
+        "enum": [
+          "PROGRAMADO",
+          "CONFIRMADO",
+          "EN_SALA_ESPERA",
+          "EN_ATENCION",
+          "ATENDIDO",
+          "CANCELADO",
+          "NO_ASISTIO"
+        ]
+      },
+      "CitaNueva": {
+        "type": "object",
+        "properties": {
+          "patientId": {
+            "type": "string"
+          },
+          "profesionalId": {
+            "type": "string"
+          },
+          "sillonId": {
+            "type": "string"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "motivo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "patientId",
+          "profesionalId",
+          "sillonId",
+          "inicio",
+          "fin"
+        ]
+      },
+      "Cita": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoCita"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "patient": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "nombres": {
+                "type": "string"
+              },
+              "apellidos": {
+                "type": "string"
+              }
+            }
+          },
+          "profesional": {
+            "$ref": "#/components/schemas/Profesional"
+          },
+          "sillon": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "nombre": {
+                "type": "string"
+              },
+              "consultorio": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "MetodoPago": {
+        "type": "string",
+        "enum": [
+          "EFECTIVO",
+          "TARJETA_CREDITO",
+          "TARJETA_DEBITO",
+          "TRANSFERENCIA",
+          "SEGURO",
+          "PASARELA"
+        ]
+      },
+      "Turno": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "ABIERTA",
+              "CERRADA"
+            ]
+          },
+          "fondoInicial": {
+            "type": "integer",
+            "description": "Importe en centavos (entero)",
+            "minimum": 0,
+            "example": 4500
+          },
+          "abiertaAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "conteoEfectivo": {
+            "type": "integer",
+            "description": "Solo tras el cierre",
+            "minimum": 0,
+            "example": 4500
+          },
+          "totalTeorico": {
+            "type": "integer",
+            "description": "Solo tras el cierre (cierre ciego, RN-02)",
+            "minimum": 0,
+            "example": 4500
+          },
+          "diferencia": {
+            "type": "integer",
+            "description": "Conteo − teórico, en centavos. Solo tras el cierre."
+          }
+        }
+      },
+      "CobroNuevo": {
+        "type": "object",
+        "properties": {
+          "patientId": {
+            "type": "string"
+          },
+          "lineas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "procedimientoId": {
+                  "type": "string"
+                },
+                "cantidad": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "procedimientoId",
+                "cantidad"
+              ]
+            }
+          },
+          "pagos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "metodo": {
+                  "$ref": "#/components/schemas/MetodoPago"
+                },
+                "monto": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                },
+                "referencia": {
+                  "type": "string"
+                },
+                "token": {
+                  "type": "string",
+                  "description": "Solo PASARELA. Token del proveedor; en la simulación: tok_visa, tok_mastercard (aprueban), tok_declined, tok_sinfondos (rechazan).",
+                  "example": "tok_visa"
+                }
+              },
+              "required": [
+                "metodo",
+                "monto"
+              ]
+            }
+          },
+          "facturar": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "patientId",
+          "lineas",
+          "pagos"
+        ]
+      },
+      "Cobro": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Importe en centavos (entero)",
+            "minimum": 0,
+            "example": 4500
+          },
+          "lineas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "descripcion": {
+                  "type": "string"
+                },
+                "cantidad": {
+                  "type": "integer"
+                },
+                "precioUnitario": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                }
+              }
+            }
+          },
+          "pagos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "metodo": {
+                  "$ref": "#/components/schemas/MetodoPago"
+                },
+                "monto": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                },
+                "referencia": {
+                  "type": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "factura": {
+            "type": "object",
+            "properties": {
+              "secuencial": {
+                "type": "integer"
+              },
+              "claveAcceso": {
+                "type": "string",
+                "description": "Clave de acceso de 49 dígitos (módulo 11)"
+              },
+              "estado": {
+                "type": "string",
+                "example": "AUTORIZADO"
+              },
+              "numeroAutorizacion": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TipoHallazgo": {
+        "type": "string",
+        "enum": [
+          "CARIES",
+          "RESTAURACION",
+          "ENDODONCIA",
+          "IMPLANTE",
+          "PROTESIS_FIJA",
+          "PROTESIS_REMOVIBLE",
+          "EXODONCIA",
+          "SELLANTE",
+          "AUSENTE"
+        ]
+      },
+      "HallazgoNuevo": {
+        "type": "object",
+        "properties": {
+          "diente": {
+            "type": "string",
+            "description": "Numeración FDI (11–48 permanentes, 51–85 temporales)",
+            "example": "16"
+          },
+          "superficie": {
+            "type": "string",
+            "enum": [
+              "M",
+              "D",
+              "O",
+              "V",
+              "L"
+            ],
+            "description": "Obligatoria para CARIES, RESTAURACION y SELLANTE; omitir para hallazgos de diente completo"
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoHallazgo"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "EXISTENTE",
+              "REQUERIDO"
+            ]
+          },
+          "nota": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "diente",
+          "tipo",
+          "estado"
+        ]
+      },
+      "Adenda": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "texto": {
+            "type": "string"
+          },
+          "autorId": {
+            "type": "string"
+          },
+          "firmaHash": {
+            "type": "string",
+            "description": "Sello HMAC-SHA256 de la firma"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Hallazgo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "diente": {
+            "type": "string"
+          },
+          "superficie": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoHallazgo"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "EXISTENTE",
+              "REQUERIDO",
+              "REALIZADO"
+            ]
+          },
+          "nota": {
+            "type": "string",
+            "nullable": true
+          },
+          "realizadoAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "procedimientoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "adendas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Adenda"
+            }
+          }
+        }
+      },
+      "Firma": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "Re-autenticación del profesional para firmar"
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "AdendaNueva": {
+        "type": "object",
+        "properties": {
+          "texto": {
+            "type": "string",
+            "minLength": 5
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "required": [
+          "texto",
+          "password"
+        ]
+      },
+      "PuntoPerio": {
+        "type": "object",
+        "properties": {
+          "punto": {
+            "type": "string",
+            "enum": [
+              "DV",
+              "V",
+              "MV",
+              "DL",
+              "L",
+              "ML"
+            ]
+          },
+          "profundidad": {
+            "type": "integer",
+            "description": "Profundidad al sondaje (mm)",
+            "minimum": 0,
+            "maximum": 15
+          },
+          "margen": {
+            "type": "integer",
+            "description": "Recesión gingival (mm); negativa si el margen cubre el límite amelocementario",
+            "minimum": -10,
+            "maximum": 15
+          },
+          "sangrado": {
+            "type": "boolean"
+          },
+          "nic": {
+            "type": "integer",
+            "description": "Nivel de inserción clínica = profundidad + recesión (solo en respuestas)"
+          }
+        },
+        "required": [
+          "punto",
+          "profundidad",
+          "margen",
+          "sangrado"
+        ]
+      },
+      "PerioExamen": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dientes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "diente": {
+                  "type": "string"
+                },
+                "puntos": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PuntoPerio"
+                  }
+                },
+                "furca": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                "movilidad": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotaNueva": {
+        "type": "object",
+        "properties": {
+          "subjetivo": {
+            "type": "string"
+          },
+          "objetivo": {
+            "type": "string"
+          },
+          "evaluacion": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "appointmentId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subjetivo",
+          "objetivo",
+          "evaluacion",
+          "plan"
+        ]
+      },
+      "Nota": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subjetivo": {
+            "type": "string"
+          },
+          "objetivo": {
+            "type": "string"
+          },
+          "evaluacion": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "autorId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firmada": {
+            "type": "boolean"
+          },
+          "bloqueada": {
+            "type": "boolean",
+            "description": "Firmada o vencido el plazo de edición (SOEP_LOCK_HOURS, 24 h)"
+          },
+          "bloqueaEn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "adendas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Adenda"
+            }
+          }
+        }
+      },
+      "Consentimiento": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "patientId": {
+            "type": "string"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "texto": {
+            "type": "string"
+          },
+          "metodo": {
+            "type": "string",
+            "enum": [
+              "FIRMA",
+              "OTP"
+            ]
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "FIRMADO"
+            ]
+          },
+          "firmanteNombre": {
+            "type": "string",
+            "nullable": true,
+            "description": "Paciente o tutor legal si es menor"
+          },
+          "pdfHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firmadoAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "otpDemo": {
+            "type": "string",
+            "description": "Solo con DEMO_MODE: el OTP enviado por el canal simulado"
+          }
+        }
+      },
+      "ItemReceta": {
+        "type": "object",
+        "properties": {
+          "medicamento": {
+            "type": "string",
+            "example": "Ibuprofeno 400 mg"
+          },
+          "dosis": {
+            "type": "string",
+            "example": "1 tableta"
+          },
+          "frecuencia": {
+            "type": "string",
+            "example": "cada 8 horas"
+          },
+          "duracion": {
+            "type": "string",
+            "example": "3 días"
+          },
+          "indicaciones": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "medicamento",
+          "dosis",
+          "frecuencia",
+          "duracion"
+        ]
+      },
+      "Receta": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "patientId": {
+            "type": "string"
+          },
+          "diagnostico": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemReceta"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PresupuestoNuevo": {
+        "type": "object",
+        "properties": {
+          "patientId": {
+            "type": "string"
+          },
+          "descuento": {
+            "type": "integer",
+            "description": "Descuento autorizado en centavos (solo el odontólogo)",
+            "minimum": 0,
+            "example": 4500,
+            "default": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fase": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "sesion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "procedimientoId": {
+                  "type": "string"
+                },
+                "diente": {
+                  "type": "string"
+                },
+                "cantidad": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 1
+                },
+                "honorario": {
+                  "type": "integer",
+                  "description": "Honorario del profesional por unidad (≤ precio)",
+                  "minimum": 0,
+                  "example": 4500,
+                  "default": 0
+                },
+                "costoLaboratorio": {
+                  "type": "integer",
+                  "description": "Costo de laboratorio en centavos",
+                  "minimum": 0,
+                  "example": 4500,
+                  "default": 0
+                }
+              },
+              "required": [
+                "fase",
+                "sesion",
+                "procedimientoId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "patientId",
+          "items"
+        ]
+      },
+      "Presupuesto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "patientId": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "BORRADOR",
+              "PRESENTADO",
+              "APROBADO",
+              "APROBADO_PARCIAL",
+              "RECHAZADO"
+            ]
+          },
+          "descuento": {
+            "type": "integer",
+            "description": "Importe en centavos (entero)",
+            "minimum": 0,
+            "example": 4500
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "fase": {
+                  "type": "integer"
+                },
+                "sesion": {
+                  "type": "integer"
+                },
+                "descripcion": {
+                  "type": "string"
+                },
+                "diente": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "cantidad": {
+                  "type": "integer"
+                },
+                "precioUnitario": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                },
+                "honorario": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                },
+                "costoLaboratorio": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                },
+                "estado": {
+                  "type": "string",
+                  "enum": [
+                    "PENDIENTE",
+                    "APROBADO",
+                    "RECHAZADO",
+                    "AGENDADO"
+                  ]
+                },
+                "appointmentId": {
+                  "type": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "totales": {
+            "type": "object",
+            "properties": {
+              "subtotal": {
+                "type": "integer",
+                "description": "Importe en centavos (entero)",
+                "minimum": 0,
+                "example": 4500
+              },
+              "descuento": {
+                "type": "integer",
+                "description": "Importe en centavos (entero)",
+                "minimum": 0,
+                "example": 4500
+              },
+              "total": {
+                "type": "integer",
+                "description": "Importe en centavos (entero)",
+                "minimum": 0,
+                "example": 4500
+              },
+              "subtotalAprobado": {
+                "type": "integer",
+                "description": "Importe en centavos (entero)",
+                "minimum": 0,
+                "example": 4500
+              },
+              "totalAprobado": {
+                "type": "integer",
+                "description": "Importe en centavos (entero)",
+                "minimum": 0,
+                "example": 4500
+              },
+              "porFase": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Insumo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "unidad": {
+            "type": "string"
+          },
+          "stockMinimo": {
+            "type": "integer"
+          },
+          "costoUnitario": {
+            "type": "integer",
+            "description": "Importe en centavos (entero)",
+            "minimum": 0,
+            "example": 4500
+          },
+          "stock": {
+            "type": "integer",
+            "description": "Saldo en el consultorio consultado"
+          },
+          "bajoMinimo": {
+            "type": "boolean"
+          },
+          "lotes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "lote": {
+                  "type": "string"
+                },
+                "vence": {
+                  "type": "string",
+                  "format": "date-time",
+                  "nullable": true
+                },
+                "cantidad": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReglaHonorario": {
+        "type": "object",
+        "properties": {
+          "profesionalId": {
+            "type": "string"
+          },
+          "procedimientoId": {
+            "type": "string",
+            "description": "Omitir para la regla general del profesional"
+          },
+          "modalidad": {
+            "type": "string",
+            "enum": [
+              "PORCENTAJE",
+              "MONTO_FIJO",
+              "PORCENTAJE_NETO"
+            ]
+          },
+          "valor": {
+            "type": "integer",
+            "description": "PORCENTAJE y PORCENTAJE_NETO: puntos básicos (4000 = 40 %). MONTO_FIJO: centavos.",
+            "minimum": 0,
+            "example": 4000
+          }
+        },
+        "required": [
+          "profesionalId",
+          "modalidad",
+          "valor"
+        ]
+      },
+      "Liquidacion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "profesionalId": {
+            "type": "string"
+          },
+          "desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Importe en centavos (entero)",
+            "minimum": 0,
+            "example": 4500
+          },
+          "lineas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "realizadoId": {
+                  "type": "string"
+                },
+                "descripcion": {
+                  "type": "string"
+                },
+                "base": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                },
+                "modalidad": {
+                  "type": "string"
+                },
+                "valor": {
+                  "type": "integer"
+                },
+                "comision": {
+                  "type": "integer",
+                  "description": "Importe en centavos (entero)",
+                  "minimum": 0,
+                  "example": 4500
+                }
+              }
+            }
+          }
+        }
+      },
+      "Periodo": {
+        "type": "object",
+        "properties": {
+          "profesionalId": {
+            "type": "string"
+          },
+          "desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "profesionalId",
+          "desde",
+          "hasta"
+        ]
+      },
+      "Reporte": {
+        "type": "object",
+        "properties": {
+          "resumen": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "filas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "RegistroAuditoria": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string",
+            "example": "READ"
+          },
+          "resource": {
+            "type": "string",
+            "example": "clinico"
+          },
+          "resourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "prevHash": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string",
+            "description": "SHA-256 encadenado con la fila anterior"
+          }
+        }
+      }
+    },
+    "parameters": {
+      "pid": {
+        "name": "pid",
+        "in": "path",
+        "required": true,
+        "description": "Id del paciente",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Id del recurso",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "idCobro": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Número del cobro",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      "hid": {
+        "name": "hid",
+        "in": "path",
+        "required": true,
+        "description": "Id del hallazgo",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "nid": {
+        "name": "nid",
+        "in": "path",
+        "required": true,
+        "description": "Id de la nota",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "iid": {
+        "name": "iid",
+        "in": "path",
+        "required": true,
+        "description": "Id del ítem del presupuesto",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "procedimientoId": {
+        "name": "procedimientoId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "patientId": {
+        "name": "patientId",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "consultorioId": {
+        "name": "consultorioId",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "profesionalIdQ": {
+        "name": "profesionalId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "profesionalIdReq": {
+        "name": "profesionalId",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "sillonIdQ": {
+        "name": "sillonId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "insumoIdQ": {
+        "name": "insumoId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "consultorioIdQ": {
+        "name": "consultorioId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "q": {
+        "name": "q",
+        "in": "query",
+        "required": false,
+        "description": "Cédula, nombres o apellidos",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "desde": {
+        "name": "desde",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "hasta": {
+        "name": "hasta",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "maximum": 500,
+          "default": 100
+        }
+      },
+      "formato": {
+        "name": "formato",
+        "in": "query",
+        "required": false,
+        "description": "csv para exportar las filas",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "default": "json"
+        }
+      }
+    },
+    "responses": {
+      "Invalido": {
+        "description": "Datos inválidos",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Falta el token o expiró",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "SinPermiso": {
+        "description": "El rol no tiene permiso, o falta verificar MFA (code MFA_REQUIRED)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Regla de negocio violada",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Sistema"
+        ],
+        "summary": "Estado del servicio y de la base de datos (RNF-02)",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "db": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Base de datos sin conexión",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Paso 1: correo y contraseña",
+        "description": "Devuelve la sesión, o un desafío MFA si el usuario tiene MFA activo. Limitado a 20 intentos por IP cada 15 min.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "odontologo@sigo.test"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "Demo1234!"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Sesion"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DesafioMfa"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "description": "Credenciales incorrectas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados intentos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login/mfa": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Paso 2: código TOTP de 6 dígitos",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mfaToken": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "example": "123456"
+                  }
+                },
+                "required": [
+                  "mfaToken",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sesion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "description": "Código incorrecto o sesión MFA vencida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados intentos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/mfa/setup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Genera el secreto TOTP para enrolar MFA",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secret": {
+                      "type": "string"
+                    },
+                    "otpauthUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/auth/mfa/enable": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Activa MFA verificando un código; devuelve una sesión con MFA verificado",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sesion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Rota el refresh token",
+        "description": "Cada uso entrega uno nuevo. Reutilizar uno ya rotado revoca todas las sesiones del usuario.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "refreshToken"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sesion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expirado por inactividad, revocado o reutilizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoca el refresh token",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "refreshToken"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Sesión cerrada"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Usuario actual y sus permisos",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/pacientes": {
+      "get": {
+        "tags": [
+          "Pacientes"
+        ],
+        "summary": "Busca pacientes (permiso pacientes:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/q"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Paciente"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Pacientes"
+        ],
+        "summary": "Alta con anamnesis obligatoria (pacientes:escribir)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PacienteNuevo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paciente"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/pacientes/{id}": {
+      "get": {
+        "tags": [
+          "Pacientes"
+        ],
+        "summary": "Ficha del paciente",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paciente"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Pacientes"
+        ],
+        "summary": "Modifica datos demográficos",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PacienteEntrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paciente"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/pacientes/{id}/anamnesis": {
+      "put": {
+        "tags": [
+          "Pacientes"
+        ],
+        "summary": "Actualiza la anamnesis (pacientes:escribir o clinico:escribir)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnamnesisEntrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paciente"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/catalogos/consultorios": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Consultorios con sus sillones",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Consultorio"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Crea un consultorio (catalogos:gestionar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "nombre"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consultorio"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/catalogos/consultorios/{id}/sillones": {
+      "post": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Agrega un sillón",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "nombre"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/catalogos/profesionales": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Profesionales",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Profesional"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Crea un profesional",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string"
+                  },
+                  "especialidad": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "nombre",
+                  "especialidad"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profesional"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/catalogos/procedimientos": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Procedimientos con precio base",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Procedimiento"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Crea un procedimiento",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codigo": {
+                    "type": "string"
+                  },
+                  "nombre": {
+                    "type": "string"
+                  },
+                  "precioBase": {
+                    "type": "integer",
+                    "description": "Importe en centavos (entero)",
+                    "minimum": 0,
+                    "example": 4500
+                  }
+                },
+                "required": [
+                  "codigo",
+                  "nombre",
+                  "precioBase"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Procedimiento"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/citas": {
+      "get": {
+        "tags": [
+          "Agenda"
+        ],
+        "summary": "Citas del periodo (vista día o semana), filtrables por sillón y profesional (agenda:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/desde"
+          },
+          {
+            "$ref": "#/components/parameters/hasta"
+          },
+          {
+            "$ref": "#/components/parameters/sillonIdQ"
+          },
+          {
+            "$ref": "#/components/parameters/profesionalIdQ"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Cita"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agenda"
+        ],
+        "summary": "Agenda una cita (agenda:gestionar)",
+        "description": "RN-03: rechaza la cita si el sillón está ocupado en ese horario, aunque el profesional sea otro. Validado en transacción (seguro ante peticiones concurrentes).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CitaNueva"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cita"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/citas/{id}/estado": {
+      "patch": {
+        "tags": [
+          "Agenda"
+        ],
+        "summary": "Cambia el estado de la cita (RF-10)",
+        "description": "Transiciones válidas: PROGRAMADO→CONFIRMADO|CANCELADO|NO_ASISTIO; CONFIRMADO→EN_SALA_ESPERA|CANCELADO|NO_ASISTIO; EN_SALA_ESPERA→EN_ATENCION|CANCELADO|NO_ASISTIO; EN_ATENCION→ATENDIDO.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "estado": {
+                    "$ref": "#/components/schemas/EstadoCita"
+                  }
+                },
+                "required": [
+                  "estado"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cita"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/recordatorios": {
+      "get": {
+        "tags": [
+          "Agenda"
+        ],
+        "summary": "Bitácora de recordatorios enviados",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "appointmentId": {
+                        "type": "string"
+                      },
+                      "tipo": {
+                        "type": "string",
+                        "enum": [
+                          "48H",
+                          "24H"
+                        ]
+                      },
+                      "canal": {
+                        "type": "string"
+                      },
+                      "destino": {
+                        "type": "string"
+                      },
+                      "mensaje": {
+                        "type": "string"
+                      },
+                      "sentAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/recordatorios/ejecutar": {
+      "post": {
+        "tags": [
+          "Agenda"
+        ],
+        "summary": "Envía ahora los recordatorios 48 h / 24 h pendientes (también corre cada hora)",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revisadas": {
+                      "type": "integer"
+                    },
+                    "enviados": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/caja/apertura": {
+      "post": {
+        "tags": [
+          "Caja"
+        ],
+        "summary": "Abre el turno de caja (caja:gestionar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fondoInicial": {
+                    "type": "integer",
+                    "description": "Importe en centavos (entero)",
+                    "minimum": 0,
+                    "example": 4500
+                  }
+                },
+                "required": [
+                  "fondoInicial"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Turno"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/caja/turno": {
+      "get": {
+        "tags": [
+          "Caja"
+        ],
+        "summary": "Turno abierto del cajero, sin totales (cierre ciego)",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Turno",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/caja/cobros": {
+      "post": {
+        "tags": [
+          "Caja"
+        ],
+        "summary": "Cobro con pagos mixtos y factura electrónica",
+        "description": "El total se calcula en el servidor con los precios del catálogo; los pagos deben sumarlo al centavo. Genera el comprobante XML con autorización simulada del SRI.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CobroNuevo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cobro"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "402": {
+            "description": "Pago rechazado por la pasarela",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/caja/cobros/{id}": {
+      "get": {
+        "tags": [
+          "Caja"
+        ],
+        "summary": "Comprobante interno de un cobro propio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idCobro"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cobro"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/caja/cobros/{id}/factura.xml": {
+      "get": {
+        "tags": [
+          "Caja"
+        ],
+        "summary": "XML del comprobante electrónico",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idCobro"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/caja/cierre": {
+      "post": {
+        "tags": [
+          "Caja"
+        ],
+        "summary": "Cierre ciego: recibe el conteo y solo entonces revela el teórico y la diferencia (RN-02)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conteoEfectivo": {
+                    "type": "integer",
+                    "description": "Importe en centavos (entero)",
+                    "minimum": 0,
+                    "example": 4500
+                  }
+                },
+                "required": [
+                  "conteoEfectivo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Turno"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/odontograma": {
+      "get": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Hallazgos del odontograma con sus adendas (clinico:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hallazgos": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Hallazgo"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/hallazgos": {
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Registra un hallazgo (clinico:escribir)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HallazgoNuevo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hallazgo"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}": {
+      "patch": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Edita un hallazgo no realizado",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/hid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "estado": {
+                    "type": "string",
+                    "enum": [
+                      "EXISTENTE",
+                      "REQUERIDO"
+                    ]
+                  },
+                  "nota": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hallazgo"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Borra un hallazgo no realizado (RN-01: lo realizado nunca se borra)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/hid"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Borrado"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}/realizar": {
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Marca como realizado (clinico:firmar) y descuenta insumos (RF-14)",
+        "description": "Con procedimientoId y consultorioId descuenta la receta de consumo (lotes FEFO) y deja el procedimiento listo para liquidar honorarios, todo en una transacción. Si falta stock responde 409 con code STOCK_INSUFICIENTE y no cambia nada.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/hid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "procedimientoId": {
+                    "type": "string"
+                  },
+                  "consultorioId": {
+                    "type": "string"
+                  },
+                  "costoLaboratorio": {
+                    "type": "integer",
+                    "description": "Importe en centavos (entero)",
+                    "minimum": 0,
+                    "example": 4500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hallazgo"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/hallazgos/{hid}/adenda": {
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Adenda firmada para corregir un procedimiento realizado",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/hid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdendaNueva"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Adenda"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/periodontograma": {
+      "get": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Exámenes periodontales con NIC calculado (RF-04)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PerioExamen"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Registra un examen periodontal (no editable)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dientes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "diente": {
+                          "type": "string"
+                        },
+                        "puntos": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PuntoPerio"
+                          },
+                          "minItems": 6,
+                          "maxItems": 6
+                        },
+                        "furca": {
+                          "type": "integer"
+                        },
+                        "movilidad": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "diente",
+                        "puntos",
+                        "furca",
+                        "movilidad"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "dientes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerioExamen"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/notas": {
+      "get": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Notas SOEP (cronología inversa)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Nota"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Nueva nota SOEP (cifrada en reposo)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotaNueva"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nota"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/notas/{nid}": {
+      "patch": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Edita la nota (solo su autor, sin firmar y dentro del plazo)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/nid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotaNueva"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nota"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/notas/{nid}/firmar": {
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Firma la nota con re-autenticación; queda inmutable",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/nid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Firma"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nota"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/clinico/pacientes/{pid}/notas/{nid}/adenda": {
+      "post": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Adenda firmada a una nota bloqueada",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/pid"
+          },
+          {
+            "$ref": "#/components/parameters/nid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdendaNueva"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Adenda"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/clinico": {
+      "get": {
+        "tags": [
+          "Expediente"
+        ],
+        "summary": "Comprobación de acceso clínico (clinico:leer + MFA)",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/consentimientos/plantillas": {
+      "get": {
+        "tags": [
+          "Consentimientos"
+        ],
+        "summary": "Plantillas por procedimiento",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "procedimientoId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "titulo": {
+                        "type": "string"
+                      },
+                      "texto": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/consentimientos": {
+      "get": {
+        "tags": [
+          "Consentimientos"
+        ],
+        "summary": "Consentimientos del paciente",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/patientId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Consentimiento"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Consentimientos"
+        ],
+        "summary": "Genera un consentimiento a firmar (FIRMA en pantalla u OTP)",
+        "description": "Con OTP envía un código de 6 dígitos (válido 10 min) al paciente, o a su tutor si es menor.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patientId": {
+                    "type": "string"
+                  },
+                  "procedimientoId": {
+                    "type": "string"
+                  },
+                  "metodo": {
+                    "type": "string",
+                    "enum": [
+                      "FIRMA",
+                      "OTP"
+                    ]
+                  }
+                },
+                "required": [
+                  "patientId",
+                  "metodo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consentimiento"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/consentimientos/{id}/firmar": {
+      "post": {
+        "tags": [
+          "Consentimientos"
+        ],
+        "summary": "Firma el consentimiento y genera el PDF",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firma": {
+                    "type": "string",
+                    "description": "Trazo como data URL PNG (método FIRMA)"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "description": "Código de 6 dígitos (método OTP)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consentimiento"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "410": {
+            "description": "OTP vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/consentimientos/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Consentimientos"
+        ],
+        "summary": "PDF del consentimiento firmado",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/recetas": {
+      "get": {
+        "tags": [
+          "Recetas"
+        ],
+        "summary": "Recetas del paciente",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/patientId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Receta"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Recetas"
+        ],
+        "summary": "Emite una receta en PDF (clinico:firmar)",
+        "description": "Si un medicamento coincide con una alergia registrada responde 409 con code ALERGIA, salvo que se envíe confirmarAlergia: true.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patientId": {
+                    "type": "string"
+                  },
+                  "diagnostico": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ItemReceta"
+                    }
+                  },
+                  "confirmarAlergia": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "patientId",
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receta"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/recetas/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Recetas"
+        ],
+        "summary": "PDF de la receta",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/presupuestos": {
+      "get": {
+        "tags": [
+          "Presupuestos"
+        ],
+        "summary": "Presupuestos del paciente con totales",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/patientId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Presupuesto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Presupuestos"
+        ],
+        "summary": "Crea un borrador por fases y sesiones (presupuestos:gestionar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresupuestoNuevo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Presupuesto"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/presupuestos/agendables": {
+      "get": {
+        "tags": [
+          "Presupuestos"
+        ],
+        "summary": "Ítems aprobados aún sin cita",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/patientId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/presupuestos/{id}/presentar": {
+      "post": {
+        "tags": [
+          "Presupuestos"
+        ],
+        "summary": "Presenta el borrador al paciente",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Presupuesto"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/presupuestos/{id}/aprobar": {
+      "post": {
+        "tags": [
+          "Presupuestos"
+        ],
+        "summary": "Registra la aprobación total o parcial (presupuestos:aprobar)",
+        "description": "Sin itemIds se aprueba todo; con itemIds solo esos y el resto queda rechazado. El descuento se prorratea sobre lo aprobado.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "itemIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Presupuesto"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/presupuestos/items/{iid}/agendar": {
+      "post": {
+        "tags": [
+          "Presupuestos"
+        ],
+        "summary": "Convierte un ítem aprobado en cita (RF-08), respetando RN-03",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/iid"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "profesionalId": {
+                    "type": "string"
+                  },
+                  "sillonId": {
+                    "type": "string"
+                  },
+                  "inicio": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "fin": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "profesionalId",
+                  "sillonId",
+                  "inicio",
+                  "fin"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "type": "object"
+                    },
+                    "cita": {
+                      "$ref": "#/components/schemas/Cita"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/inventario": {
+      "get": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Stock por consultorio con lotes y alerta de mínimo (inventario:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/consultorioId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Insumo"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/inventario/insumos": {
+      "post": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Crea un insumo (catalogos:gestionar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codigo": {
+                    "type": "string"
+                  },
+                  "nombre": {
+                    "type": "string"
+                  },
+                  "unidad": {
+                    "type": "string"
+                  },
+                  "stockMinimo": {
+                    "type": "integer"
+                  },
+                  "costoUnitario": {
+                    "type": "integer",
+                    "description": "Importe en centavos (entero)",
+                    "minimum": 0,
+                    "example": 4500
+                  }
+                },
+                "required": [
+                  "codigo",
+                  "nombre",
+                  "unidad"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/inventario/entradas": {
+      "post": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Ingresa un lote (inventario:gestionar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "insumoId": {
+                    "type": "string"
+                  },
+                  "consultorioId": {
+                    "type": "string"
+                  },
+                  "lote": {
+                    "type": "string"
+                  },
+                  "vence": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "cantidad": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "insumoId",
+                  "consultorioId",
+                  "lote",
+                  "cantidad"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/inventario/ajustes": {
+      "post": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Ajuste por conteo físico",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "loteId": {
+                    "type": "string"
+                  },
+                  "cantidadReal": {
+                    "type": "integer"
+                  },
+                  "motivo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "loteId",
+                  "cantidadReal",
+                  "motivo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/inventario/movimientos": {
+      "get": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Libro de movimientos (solo inserción)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/insumoIdQ"
+          },
+          {
+            "$ref": "#/components/parameters/consultorioIdQ"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/inventario/receta-consumo/{procedimientoId}": {
+      "get": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Receta estándar de consumo del procedimiento",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/procedimientoId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "insumoId": {
+                        "type": "string"
+                      },
+                      "cantidad": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Inventario"
+        ],
+        "summary": "Reemplaza la receta de consumo (catalogos:gestionar)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/procedimientoId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "insumoId": {
+                          "type": "string"
+                        },
+                        "cantidad": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "insumoId",
+                        "cantidad"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta"
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/honorarios/reglas": {
+      "get": {
+        "tags": [
+          "Honorarios"
+        ],
+        "summary": "Reglas de honorarios (honorarios:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/profesionalIdQ"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReglaHonorario"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Honorarios"
+        ],
+        "summary": "Define o reemplaza una regla (honorarios:configurar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReglaHonorario"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReglaHonorario"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        }
+      }
+    },
+    "/api/honorarios/previsualizar": {
+      "get": {
+        "tags": [
+          "Honorarios"
+        ],
+        "summary": "Calcula la liquidación sin guardarla (honorarios:gestionar)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/profesionalIdReq"
+          },
+          {
+            "$ref": "#/components/parameters/desde"
+          },
+          {
+            "$ref": "#/components/parameters/hasta"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lineas": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "sinRegla": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Importe en centavos (entero)",
+                      "minimum": 0,
+                      "example": 4500
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/honorarios/liquidar": {
+      "post": {
+        "tags": [
+          "Honorarios"
+        ],
+        "summary": "Liquida los procedimientos pendientes del periodo; cada uno se liquida una sola vez",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Periodo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Liquidacion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        }
+      }
+    },
+    "/api/honorarios/liquidaciones": {
+      "get": {
+        "tags": [
+          "Honorarios"
+        ],
+        "summary": "Historial de liquidaciones",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/profesionalIdQ"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Liquidacion"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/reportes/corte-caja": {
+      "get": {
+        "tags": [
+          "Reportes"
+        ],
+        "summary": "Corte de caja por turno cerrado (reportes:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/desde"
+          },
+          {
+            "$ref": "#/components/parameters/hasta"
+          },
+          {
+            "$ref": "#/components/parameters/formato"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reporte"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/reportes/honorarios": {
+      "get": {
+        "tags": [
+          "Reportes"
+        ],
+        "summary": "Honorarios liquidados por profesional",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/desde"
+          },
+          {
+            "$ref": "#/components/parameters/hasta"
+          },
+          {
+            "$ref": "#/components/parameters/formato"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reporte"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/reportes/inventario": {
+      "get": {
+        "tags": [
+          "Reportes"
+        ],
+        "summary": "Inventario valorizado, mínimos y lotes por vencer",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/formato"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reporte"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/reportes/ausentismo": {
+      "get": {
+        "tags": [
+          "Reportes"
+        ],
+        "summary": "Tasa de no-show por profesional",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/desde"
+          },
+          {
+            "$ref": "#/components/parameters/hasta"
+          },
+          {
+            "$ref": "#/components/parameters/formato"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reporte"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalido"
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/auditoria": {
+      "get": {
+        "tags": [
+          "Auditoría"
+        ],
+        "summary": "Últimos registros del log (auditoria:leer)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistroAuditoria"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    },
+    "/api/auditoria/verificar": {
+      "get": {
+        "tags": [
+          "Auditoría"
+        ],
+        "summary": "Verifica la cadena de hashes",
+        "responses": {
+          "200": {
+            "description": "Operación correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "brokenAt": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/SinPermiso"
+          }
+        }
+      }
+    }
+  }
+}

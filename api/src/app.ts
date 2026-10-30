@@ -60,7 +60,9 @@ export function createApp(opts: AppOptions = {}) {
     app.use(["/api/auth/login", "/api/auth/mfa/enable"], limiter);
   }
 
-  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
+  // Documentación OpenAPI 3.0: JSON descargable y Swagger UI.
+  app.get("/api/docs/openapi.json", (_req, res) => res.json(openapi));
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi, { customSiteTitle: "SIGO-Dental API" }));
   app.use("/api/auth", authRouter);
   app.use("/api/clinico/pacientes", expedienteRouter);
   app.use("/api/inventario", inventarioRouter);

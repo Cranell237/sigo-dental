@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc -p tsconfig.build.json",
-    "start": "prisma migrate deploy && tsx prisma/seed.ts && node dist/src/index.js",
+    "start": "prisma migrate deploy && tsx prisma/seed.ts && tsx prisma/demo.ts && node dist/src/index.js",
     "seed": "tsx prisma/seed.ts",
     "test": "vitest run",
     "lint": "tsc --noEmit",
@@ -14,7 +14,11 @@
     "backup": "tsx scripts/backup.ts",
     "restaurar": "tsx scripts/backup.ts restaurar",
     "coverage": "vitest run --coverage",
-    "carga": "tsx scripts/carga.ts"
+    "carga": "tsx scripts/carga.ts",
+    "openapi": "tsx scripts/openapi.ts",
+    "demo": "tsx prisma/demo.ts",
+    "e2e": "tsx scripts/e2e.ts",
+    "totp": "tsx scripts/totp.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
@@ -32,6 +36,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "@types/autocannon": "^7.12.7",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
