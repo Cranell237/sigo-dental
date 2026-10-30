@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { config } from "../config.js";
+import { recordAudit } from "../audit.js";
 import { authenticate } from "../middleware/auth.js";
 import { PERMISSIONS, type Role } from "../roles.js";
 
@@ -17,6 +18,7 @@ authRouter.post("/login", async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
   const ok = user && (await bcrypt.compare(parsed.data.password, user.passwordHash));
+  await recordAudit({ userId: user?.id, action: ok ? "LOGIN" : "LOGIN_FALLIDO", resource: "auth", ip: req.ip });
   if (!user || !ok) return res.status(401).json({ error: "Credenciales incorrectas" });
 
   const token = jwt.sign({ role: user.role }, config.jwtSecret, { subject: user.id, expiresIn: config.accessTtl });

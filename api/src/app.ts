@@ -4,6 +4,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { authRouter } from "./routes/auth.js";
+import { auditoriaRouter } from "./routes/auditoria.js";
 import { clinicoRouter } from "./routes/clinico.js";
 
 export function createApp() {
@@ -17,6 +18,7 @@ export function createApp() {
 
   app.use("/api/auth", authRouter);
   app.use("/api/clinico", clinicoRouter);
+  app.use("/api/auditoria", auditoriaRouter);
 
   // En producción Express sirve el build de React (un solo servicio en Render).
   const here = path.dirname(fileURLToPath(import.meta.url));

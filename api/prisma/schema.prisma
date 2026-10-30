@@ -16,3 +16,17 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
 }
+
+// RNF-06: solo inserción. Los triggers de la migración bloquean UPDATE y DELETE;
+// cada fila incluye el hash de la anterior para detectar manipulación.
+model AuditLog {
+  id         Int     @id @default(autoincrement())
+  timestamp  String
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  ip         String?
+  prevHash   String
+  hash       String
+}
