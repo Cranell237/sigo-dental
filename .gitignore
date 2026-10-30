@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+uploads/
+coverage/
+.DS_Store
+Thumbs.db
