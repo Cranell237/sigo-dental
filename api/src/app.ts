@@ -3,6 +3,8 @@ import cors from "cors";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import swaggerUi from "swagger-ui-express";
+import { openapi } from "./openapi.js";
 import { authRouter } from "./routes/auth.js";
 import { auditoriaRouter } from "./routes/auditoria.js";
 import { clinicoRouter } from "./routes/clinico.js";
@@ -16,6 +18,7 @@ export function createApp() {
     res.json({ status: "ok" });
   });
 
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
   app.use("/api/auth", authRouter);
   app.use("/api/clinico", clinicoRouter);
   app.use("/api/auditoria", auditoriaRouter);

@@ -14,6 +14,8 @@ model User {
   name         String
   role         String
   passwordHash String
+  mfaSecret    String? // cifrado con AES-256-GCM
+  mfaEnabled   Boolean  @default(false)
   createdAt    DateTime @default(now())
 }
 
@@ -29,4 +31,17 @@ model AuditLog {
   ip         String?
   prevHash   String
   hash       String
+}
+
+// Refresh tokens rotativos: se guarda solo el hash. expiresAt se renueva en cada rotación (15 min de inactividad).
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  mfa       Boolean  @default(false)
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

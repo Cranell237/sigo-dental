@@ -22,3 +22,6 @@ export const PERMISSIONS: Record<Role, Permission[]> = {
 };
 
 export const can = (role: Role, p: Permission) => PERMISSIONS[role].includes(p);
+
+// Roles con acceso clínico o financiero: MFA obligatorio (RNF-05).
+export const MFA_ROLES: Role[] = ["ODONTOLOGO", "ASISTENTE", "RECEPCIONISTA", "AUDITOR"];
