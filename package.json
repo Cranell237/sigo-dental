@@ -1,0 +1,18 @@
+{
+  "name": "sigo-dental",
+  "private": true,
+  "workspaces": ["api", "web"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w api\" \"npm run dev -w web\"",
+    "build": "npm run build -w web && npm run build -w api",
+    "start": "npm run start -w api",
+    "seed": "npm run seed -w api",
+    "test": "npm run test -w api",
+    "lint": "npm run lint -w api && npm run lint -w web",
+    "typecheck": "npm run typecheck -w api && npm run typecheck -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

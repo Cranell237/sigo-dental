@@ -12,5 +12,17 @@ React + Vite + TypeScript + Tailwind · Node.js + Express + TypeScript · SQLite
 ## Despliegue
 Render (un solo Web Service; Express sirve el API y el build de React). Ver la sección "Despliegue en Render" del plan.
 
+## Ejecución local
+```bash
+npm install
+cp api/.env.example api/.env
+npm run db:migrate -w api
+npm run seed
+npm run dev
+```
+Web en http://localhost:5173 · API en http://localhost:3000/api/health
+
+Usuarios de demo (contraseña `Demo1234!`): admin, odontologo, recepcion, asistente, auditor @sigo.test
+
 ## Estado
-Fase 0 (fundamentos) pendiente. TODO: instrucciones de instalación y ejecución cuando exista el código.
+Fase 0 en curso: esqueleto (web + api + Prisma/SQLite + render.yaml) listo. Pendiente: RBAC, login/MFA, auditoría, CI.
