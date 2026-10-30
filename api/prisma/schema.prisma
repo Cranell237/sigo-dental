@@ -293,3 +293,79 @@ model PerioDiente {
   furca     Int         @default(0)
   movilidad Int         @default(0)
 }
+
+// ---------- Fase 2: consentimientos, recetas y presupuestos ----------
+
+// RF-06: plantilla de consentimiento por procedimiento (procedimientoId nulo = genérica).
+model ConsentimientoPlantilla {
+  id              String  @id @default(cuid())
+  procedimientoId String?
+  titulo          String
+  texto           String
+}
+
+// El texto se copia al consentimiento (snapshot) para que firmar sea inmutable aunque cambie la plantilla.
+model Consentimiento {
+  id             String    @id @default(cuid())
+  patientId      String
+  titulo         String
+  texto          String
+  metodo         String // FIRMA | OTP
+  otpHash        String?
+  otpExpira      DateTime?
+  estado         String    @default("PENDIENTE") // PENDIENTE | FIRMADO
+  firmanteNombre String? // el paciente o, si es menor, su tutor legal
+  pdfPath        String?
+  pdfHash        String?
+  creadoPorId    String
+  createdAt      DateTime  @default(now())
+  firmadoAt      DateTime?
+
+  @@index([patientId])
+}
+
+// §8.1: recetas odontológicas en PDF.
+model Receta {
+  id          String   @id @default(cuid())
+  patientId   String
+  autorId     String
+  diagnostico String?
+  items       String // JSON: [{ medicamento, dosis, frecuencia, duracion, indicaciones }]
+  pdfPath     String
+  createdAt   DateTime @default(now())
+
+  @@index([patientId])
+}
+
+// RF-07/08: presupuesto por fases y sesiones. Importes en centavos.
+model Presupuesto {
+  id              String    @id @default(cuid())
+  patientId       String
+  autorId         String
+  estado          String    @default("BORRADOR") // BORRADOR | PRESENTADO | APROBADO | APROBADO_PARCIAL | RECHAZADO
+  descuento       Int       @default(0)
+  autorizadoPorId String? // quien autorizó el descuento
+  createdAt       DateTime  @default(now())
+  aprobadoAt      DateTime?
+
+  items PresupuestoItem[]
+
+  @@index([patientId])
+}
+
+model PresupuestoItem {
+  id               String      @id @default(cuid())
+  presupuestoId    String
+  presupuesto      Presupuesto @relation(fields: [presupuestoId], references: [id])
+  fase             Int
+  sesion           Int
+  procedimientoId  String
+  descripcion      String
+  diente           String?
+  cantidad         Int
+  precioUnitario   Int
+  honorario        Int // parte del precio que corresponde al profesional (RF-13)
+  costoLaboratorio Int         @default(0)
+  estado           String      @default("PENDIENTE") // PENDIENTE | APROBADO | RECHAZADO | AGENDADO
+  appointmentId    String?
+}

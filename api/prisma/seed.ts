@@ -53,5 +53,15 @@ for (const { alergias, anticoagulado, ...p } of pacientes) {
   if (await prisma.patient.findUnique({ where: { cedula: p.cedula } })) continue;
   await prisma.patient.create({ data: { ...p, anamnesis: { create: { alergias: JSON.stringify(alergias), anticoagulado } } } });
 }
-console.log("Seed: catálogos y pacientes de demostración");
+// Plantillas de consentimiento: una genérica y una por procedimiento.
+const TEXTO = (proc: string) =>
+  `Declaro que el profesional me ha explicado en términos comprensibles el procedimiento de "${proc}", su finalidad, los beneficios esperados, las alternativas de tratamiento y los riesgos y posibles complicaciones propios de este tipo de intervención, incluyendo reacciones a anestésicos o medicamentos. He podido hacer preguntas y fueron resueltas. Entiendo que puedo retirar mi consentimiento antes del procedimiento. Autorizo su realización y confirmo que la información médica que proporcioné es verdadera y completa.`;
+if (!(await prisma.consentimientoPlantilla.findFirst({ where: { procedimientoId: null } }))) {
+  await prisma.consentimientoPlantilla.create({ data: { titulo: "Consentimiento informado general", texto: TEXTO("atención odontológica") } });
+}
+for (const proc of await prisma.procedimiento.findMany()) {
+  if (await prisma.consentimientoPlantilla.findFirst({ where: { procedimientoId: proc.id } })) continue;
+  await prisma.consentimientoPlantilla.create({ data: { procedimientoId: proc.id, titulo: `Consentimiento informado — ${proc.nombre}`, texto: TEXTO(proc.nombre) } });
+}
+console.log("Seed: catálogos, pacientes y plantillas de demostración");
 await prisma.$disconnect();

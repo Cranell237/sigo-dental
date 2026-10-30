@@ -10,3 +10,4 @@ uploads/
 coverage/
 .DS_Store
 Thumbs.db
+uploads-test/

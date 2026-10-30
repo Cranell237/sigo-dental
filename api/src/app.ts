@@ -12,6 +12,9 @@ import { citasRouter } from "./routes/citas.js";
 import { cajaRouter } from "./routes/caja.js";
 import { recordatoriosRouter } from "./routes/recordatorios.js";
 import { auditoriaRouter } from "./routes/auditoria.js";
+import { consentimientosRouter } from "./routes/consentimientos.js";
+import { recetasRouter } from "./routes/recetas.js";
+import { presupuestosRouter } from "./routes/presupuestos.js";
 import { expedienteRouter } from "./routes/expediente.js";
 import { clinicoRouter } from "./routes/clinico.js";
 
@@ -27,6 +30,9 @@ export function createApp() {
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
   app.use("/api/auth", authRouter);
   app.use("/api/clinico/pacientes", expedienteRouter);
+  app.use("/api/consentimientos", consentimientosRouter);
+  app.use("/api/recetas", recetasRouter);
+  app.use("/api/presupuestos", presupuestosRouter);
   app.use("/api/clinico", clinicoRouter);
   app.use("/api/pacientes", pacientesRouter);
   app.use("/api/catalogos", catalogosRouter);

@@ -24,7 +24,7 @@ export const TRANSICIONES: Record<Estado, Estado[]> = {
 // Las citas canceladas o con no-show liberan el sillón.
 const LIBERAN = ["CANCELADO", "NO_ASISTIO"];
 
-class Conflicto extends Error {}
+export class Conflicto extends Error {}
 
 const createSchema = z
   .object({
@@ -58,9 +58,29 @@ citasRouter.get("/", requirePermission("agenda:leer"), async (req, res) => {
   );
 });
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+export interface NuevaCita {
+  patientId: string;
+  profesionalId: string;
+  sillonId: string;
+  inicio: Date;
+  fin: Date;
+  motivo?: string;
+}
+
 // RN-03: no se permiten dos citas activas simultáneas en el mismo sillón.
 // Se inserta primero (esto toma el bloqueo de escritura de SQLite, serializando las peticiones
-// concurrentes) y luego se valida dentro de la misma transacción; si hay choque se revierte.
+// concurrentes) y luego se valida dentro de la misma transacción; si hay choque se lanza Conflicto
+// y la transacción se revierte.
+export async function crearCitaEn(tx: Tx, d: NuevaCita) {
+  const created = await tx.appointment.create({ data: d });
+  const choque = await tx.appointment.count({
+    where: { sillonId: d.sillonId, id: { not: created.id }, estado: { notIn: LIBERAN }, inicio: { lt: d.fin }, fin: { gt: d.inicio } },
+  });
+  if (choque > 0) throw new Conflicto();
+  return created;
+}
+
 citasRouter.post("/", requirePermission("agenda:gestionar"), async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detalles: parsed.error.issues });
@@ -74,14 +94,7 @@ citasRouter.post("/", requirePermission("agenda:gestionar"), async (req, res) =>
   if (!patient || !profesional || !sillon) return res.status(404).json({ error: "Paciente, profesional o sillón no existe" });
 
   try {
-    const cita = await prisma.$transaction(async (tx) => {
-      const created = await tx.appointment.create({ data: d });
-      const choque = await tx.appointment.count({
-        where: { sillonId: d.sillonId, id: { not: created.id }, estado: { notIn: LIBERAN }, inicio: { lt: d.fin }, fin: { gt: d.inicio } },
-      });
-      if (choque > 0) throw new Conflicto();
-      return created;
-    });
+    const cita = await prisma.$transaction((tx) => crearCitaEn(tx, d));
     res.status(201).json(await prisma.appointment.findUnique({ where: { id: cita.id }, include }));
   } catch (e) {
     if (e instanceof Conflicto) return res.status(409).json({ error: "El sillón ya está ocupado en ese horario" });
