@@ -28,4 +28,5 @@ MFA: todos menos admin lo tienen activo con el secreto de demo `JBSWY3DPEHPK3PXP
 
 ## Estado
 - **Fase 0 (fundamentos y seguridad): completa.** Ver [`docs/architecture.md`](docs/architecture.md).
-- **Fase 1 (administrativo y turnos): en curso.** Hecho: ficha del paciente, anamnesis con alertas (1.1, 1.2), catálogos (1.3), agenda día/semana, no solapamiento por sillón y estados de cita (1.4-1.6). Pendiente: recordatorios (1.7), caja (1.8), cierre ciego (1.9) y facturación simulada (1.10).
+- **Fase 1 (administrativo y turnos): completa.** Pacientes y anamnesis con alertas, catálogos, agenda sin solapes y con estados, recordatorios 48 h/24 h (canales simulados), caja con pagos mixtos, cierre ciego y factura electrónica XML con autorización simulada del SRI.
+- Siguiente: Fase 2 (odontograma, periodontograma, notas SOEP inmutables, consentimientos, recetas y presupuestos).

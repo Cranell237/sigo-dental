@@ -139,3 +139,80 @@ model Appointment {
   @@index([sillonId, inicio])
   @@index([inicio])
 }
+
+// ---------- Fase 1: caja, facturación y recordatorios ----------
+
+// RF-12 / RN-02: turno de caja. Los importes son enteros en centavos.
+model CajaTurno {
+  id             String    @id @default(cuid())
+  userId         String
+  fondoInicial   Int
+  estado         String    @default("ABIERTA") // ABIERTA | CERRADA
+  abiertaAt      DateTime  @default(now())
+  cerradaAt      DateTime?
+  conteoEfectivo Int? // lo ingresa la recepcionista a ciegas
+  totalTeorico   Int? // efectivo esperado: se calcula y se revela solo al cerrar
+  diferencia     Int?
+
+  cobros Cobro[]
+
+  @@index([userId, estado])
+}
+
+model Cobro {
+  id        Int       @id @default(autoincrement())
+  turnoId   String
+  turno     CajaTurno @relation(fields: [turnoId], references: [id])
+  patientId String
+  total     Int
+  createdAt DateTime  @default(now())
+
+  lineas  CobroLinea[]
+  pagos   Pago[]
+  factura Factura?
+}
+
+model CobroLinea {
+  id              String @id @default(cuid())
+  cobroId         Int
+  cobro           Cobro  @relation(fields: [cobroId], references: [id])
+  procedimientoId String
+  descripcion     String
+  cantidad        Int
+  precioUnitario  Int
+}
+
+model Pago {
+  id         String  @id @default(cuid())
+  cobroId    Int
+  cobro      Cobro   @relation(fields: [cobroId], references: [id])
+  metodo     String // EFECTIVO | TARJETA_CREDITO | TARJETA_DEBITO | TRANSFERENCIA | SEGURO
+  monto      Int
+  referencia String?
+}
+
+// Comprobante electrónico (XML). La autorización es simulada (adaptador del SRI).
+model Factura {
+  id                 String   @id @default(cuid())
+  cobroId            Int      @unique
+  cobro              Cobro    @relation(fields: [cobroId], references: [id])
+  secuencial         Int      @unique
+  claveAcceso        String   @unique
+  numeroAutorizacion String
+  estado             String
+  xml                String
+  createdAt          DateTime @default(now())
+}
+
+// RF-11: bitácora de recordatorios enviados (uno por cita y tipo).
+model Recordatorio {
+  id            String   @id @default(cuid())
+  appointmentId String
+  tipo          String // 48H | 24H
+  canal         String // EMAIL | WHATSAPP | SMS
+  destino       String
+  mensaje       String
+  sentAt        DateTime @default(now())
+
+  @@unique([appointmentId, tipo])
+}

@@ -126,6 +126,7 @@ export default function Agenda() {
   const [citas, setCitas] = useState<Cita[]>([]);
   const [nueva, setNueva] = useState(false);
   const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
 
   useEffect(() => {
     api<Consultorio[]>("/catalogos/consultorios").then(setConsultorios);
@@ -151,6 +152,11 @@ export default function Agenda() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Error");
     }
+  }
+
+  async function recordatorios() {
+    const r = await api<{ enviados: number }>("/recordatorios/ejecutar", "POST");
+    setAviso(`Recordatorios enviados (simulados): ${r.enviados}`);
   }
 
   if (nueva) return <NuevaCita consultorios={consultorios} profesionales={profesionales} dia={dia} onDone={() => { setNueva(false); cargar(); }} />;
@@ -180,9 +186,11 @@ export default function Agenda() {
             {profesionales.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </select>
         </label>
+        {puedeEditar && <button onClick={recordatorios} className="rounded-lg border border-slate-300 px-4 py-2">Enviar recordatorios</button>}
         {puedeEditar && <button onClick={() => setNueva(true)} className="rounded-lg bg-sky-600 px-4 py-2 text-white">Nueva cita</button>}
       </div>
       {error && <p role="alert" className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {aviso && <p className="rounded bg-green-50 p-2 text-sm text-green-800">{aviso}</p>}
       {!citas.length && <p className="rounded-lg border border-slate-200 bg-white p-6 text-center text-slate-500">No hay citas en este periodo.</p>}
       {Object.entries(porDia).map(([d, lista]) => (
         <div key={d}>

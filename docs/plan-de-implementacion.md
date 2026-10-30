@@ -80,7 +80,7 @@ Requisitos previos: el proyecto debe ser un repositorio git y tener remoto en Gi
 
 ---
 
-## Fase 1 — Core administrativo y turnos (Sprints 1-4)
+## Fase 1 — Core administrativo y turnos (Sprints 1-4) — ✅ completada
 
 | # | Entregable | Cubre |
 |---|---|---|

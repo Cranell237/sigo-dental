@@ -93,6 +93,29 @@ export const openapi = {
     "/api/citas/{id}/estado": {
       patch: { tags: ["Agenda"], summary: "Cambia el estado respetando las transiciones válidas (RF-10)", security: bearer, responses: { 200: { description: "ok" }, 409: { description: "Transición no permitida" } } },
     },
+    "/api/caja/apertura": { post: { tags: ["Caja"], summary: "Abre el turno de caja con el fondo inicial (centavos)", security: bearer, responses: { 201: { description: "Turno abierto" }, 409: { description: "Ya hay un turno abierto" } } } },
+    "/api/caja/turno": { get: { tags: ["Caja"], summary: "Turno abierto del cajero. No expone totales (RN-02).", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/caja/cobros": {
+      post: {
+        tags: ["Caja"],
+        summary: "Cobro con pagos mixtos. El total se calcula en el servidor y los pagos deben sumarlo al centavo. Emite factura XML simulada.",
+        security: bearer,
+        responses: { 201: { description: "Cobro y factura" }, 400: { description: "Pagos no cuadran" }, 409: { description: "Sin turno abierto" } },
+      },
+    },
+    "/api/caja/cobros/{id}": { get: { tags: ["Caja"], summary: "Comprobante interno", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/caja/cobros/{id}/factura.xml": { get: { tags: ["Caja"], summary: "XML del comprobante electrónico (autorización simulada)", security: bearer, responses: { 200: { description: "application/xml" } } } },
+    "/api/caja/cierre": {
+      post: {
+        tags: ["Caja"],
+        summary: "Cierre ciego: recibe el conteo físico y solo entonces revela el efectivo teórico y la diferencia (RN-02)",
+        security: bearer,
+        requestBody: { content: json(obj({ conteoEfectivo: { type: "integer" } }, ["conteoEfectivo"])) },
+        responses: { 200: { description: "Turno cerrado con diferencia" } },
+      },
+    },
+    "/api/recordatorios": { get: { tags: ["Agenda"], summary: "Bitácora de recordatorios enviados", security: bearer, responses: { 200: { description: "ok" } } } },
+    "/api/recordatorios/ejecutar": { post: { tags: ["Agenda"], summary: "Ejecuta a mano el envío de recordatorios 48 h / 24 h (también corre cada hora con node-cron)", security: bearer, responses: { 200: { description: "{ revisadas, enviados }" } } } },
     "/api/clinico": {
       get: {
         tags: ["Clínico"],
