@@ -18,7 +18,46 @@ const hashEntry = (prevHash: string, e: Entry) =>
     .update(JSON.stringify([prevHash, e.timestamp, e.userId, e.action, e.resource, e.resourceId, e.ip]))
     .digest("hex");
 
-export async function recordAudit(e: Omit<Partial<Entry>, "timestamp"> & Pick<Entry, "action" | "resource">) {
+// Las escrituras pasan por una cola en memoria que encadena los hashes y las inserta por lotes.
+// Antes cada fila abría una transacción (leer el último hash + insertar): con 150 accesos concurrentes
+// esas transacciones agotaban su tiempo de espera y se perdían filas de auditoría.
+// Supone un único proceso escritor, que es el caso con SQLite (un solo servicio en Render).
+let ultimoHash: string | null = null; // caché del último hash; null = leerlo de la base
+const pendientes: { entry: Entry; resolve: () => void; reject: (e: unknown) => void }[] = [];
+let escribiendo: Promise<void> | null = null;
+const LOTE = 200;
+
+async function vaciarCola() {
+  while (pendientes.length) {
+    const lote = pendientes.splice(0, LOTE);
+    try {
+      if (ultimoHash === null) ultimoHash = (await prisma.auditLog.findFirst({ orderBy: { id: "desc" } }))?.hash ?? GENESIS;
+      let prev = ultimoHash;
+      const data = lote.map(({ entry }) => {
+        const hash = hashEntry(prev, entry);
+        const fila = { ...entry, prevHash: prev, hash };
+        prev = hash;
+        return fila;
+      });
+      await prisma.auditLog.createMany({ data }); // se insertan en orden: los ids siguen la cadena
+      ultimoHash = prev;
+      lote.forEach((p) => p.resolve());
+    } catch (err) {
+      ultimoHash = null; // ante cualquier duda se vuelve a leer el último hash real
+      lote.forEach((p) => p.reject(err));
+    }
+  }
+}
+
+function programar() {
+  if (escribiendo) return;
+  escribiendo = vaciarCola().finally(() => {
+    escribiendo = null;
+    if (pendientes.length) programar(); // llegó algo mientras terminaba la vuelta anterior
+  });
+}
+
+export function recordAudit(e: Omit<Partial<Entry>, "timestamp"> & Pick<Entry, "action" | "resource">) {
   const entry: Entry = {
     timestamp: new Date().toISOString(),
     userId: e.userId ?? null,
@@ -27,11 +66,9 @@ export async function recordAudit(e: Omit<Partial<Entry>, "timestamp"> & Pick<En
     resourceId: e.resourceId ?? null,
     ip: e.ip ?? null,
   };
-  // La transacción serializa la escritura para que la cadena no se bifurque.
-  await prisma.$transaction(async (tx) => {
-    const last = await tx.auditLog.findFirst({ orderBy: { id: "desc" } });
-    const prevHash = last?.hash ?? GENESIS;
-    await tx.auditLog.create({ data: { ...entry, prevHash, hash: hashEntry(prevHash, entry) } });
+  return new Promise<void>((resolve, reject) => {
+    pendientes.push({ entry, resolve, reject });
+    programar();
   });
 }
 
@@ -51,7 +88,7 @@ export const auditAccess = (resource: string) => (req: Request, res: Response, n
   res.on("finish", () => {
     if (res.statusCode >= 400) return;
     const action = req.method === "GET" ? "READ" : req.method === "POST" ? "CREATE" : req.method === "DELETE" ? "DELETE" : "UPDATE";
-    recordAudit({ userId: req.user?.id, action, resource, resourceId: req.params.id ?? req.originalUrl.split("?")[0].slice(0, 200), ip: req.ip }).catch((err) =>
+    recordAudit({ userId: req.user?.id, action, resource, resourceId: (req.params.id as string | undefined) ?? req.originalUrl.split("?")[0].slice(0, 200), ip: req.ip }).catch((err) =>
       console.error("Fallo al registrar auditoría", err),
     );
   });

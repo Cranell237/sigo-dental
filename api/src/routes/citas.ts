@@ -105,7 +105,7 @@ citasRouter.post("/", requirePermission("agenda:gestionar"), async (req, res) =>
 citasRouter.patch("/:id/estado", requirePermission("agenda:gestionar"), async (req, res) => {
   const p = z.object({ estado: z.enum(ESTADOS) }).safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Estado inválido" });
-  const cita = await prisma.appointment.findUnique({ where: { id: req.params.id } });
+  const cita = await prisma.appointment.findUnique({ where: { id: String(req.params.id) } });
   if (!cita) return res.status(404).json({ error: "Cita no encontrada" });
   if (!TRANSICIONES[cita.estado as Estado].includes(p.data.estado)) {
     return res.status(409).json({ error: `Transición no permitida: ${cita.estado} → ${p.data.estado}` });

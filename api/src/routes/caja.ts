@@ -117,13 +117,13 @@ async function cobroPropio(id: number, userId: string) {
 }
 
 cajaRouter.get("/cobros/:id", async (req, res) => {
-  const c = await cobroPropio(Number(req.params.id), req.user!.id);
+  const c = await cobroPropio(Number(String(req.params.id)), req.user!.id);
   if (!c) return res.status(404).json({ error: "Cobro no encontrado" });
   res.json({ comprobante: `CI-${String(c.id).padStart(6, "0")}`, ...c });
 });
 
 cajaRouter.get("/cobros/:id/factura.xml", async (req, res) => {
-  const c = await cobroPropio(Number(req.params.id), req.user!.id);
+  const c = await cobroPropio(Number(String(req.params.id)), req.user!.id);
   const f = c && (await prisma.factura.findUnique({ where: { cobroId: c.id } }));
   if (!f) return res.status(404).json({ error: "Factura no encontrada" });
   res.type("application/xml").send(f.xml);

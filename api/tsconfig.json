@@ -9,5 +9,5 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src", "prisma", "test"]
+  "include": ["src", "prisma", "test", "scripts"]
 }

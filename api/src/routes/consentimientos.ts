@@ -75,7 +75,7 @@ const firmarSchema = z.object({ firma: z.string().max(700_000).optional(), otp: 
 consentimientosRouter.post("/:id/firmar", escribir, async (req, res) => {
   const p = firmarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
-  const c = await prisma.consentimiento.findUnique({ where: { id: req.params.id } });
+  const c = await prisma.consentimiento.findUnique({ where: { id: String(req.params.id) } });
   if (!c) return res.status(404).json({ error: "Consentimiento no encontrado" });
   if (c.estado === "FIRMADO") return res.status(409).json({ error: "El consentimiento ya está firmado" });
   const paciente = await prisma.patient.findUniqueOrThrow({ where: { id: c.patientId } });
@@ -121,7 +121,7 @@ consentimientosRouter.post("/:id/firmar", escribir, async (req, res) => {
 });
 
 consentimientosRouter.get("/:id/pdf", leer, async (req, res) => {
-  const c = await prisma.consentimiento.findUnique({ where: { id: req.params.id } });
+  const c = await prisma.consentimiento.findUnique({ where: { id: String(req.params.id) } });
   if (!c?.pdfPath) return res.status(404).json({ error: "El consentimiento aún no está firmado" });
   res.type("application/pdf").send(await storage.read(c.pdfPath));
 });

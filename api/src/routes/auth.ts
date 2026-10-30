@@ -52,7 +52,7 @@ authRouter.post("/login/mfa", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
   let sub: string;
   try {
-    const p = jwt.verify(parsed.data.mfaToken, config.jwtSecret) as { sub: string; purpose?: string };
+    const p = jwt.verify(parsed.data.mfaToken, config.jwtSecret, { algorithms: ["HS256"] }) as { sub: string; purpose?: string };
     if (p.purpose !== "mfa") throw new Error();
     sub = p.sub;
   } catch {

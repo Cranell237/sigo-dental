@@ -49,19 +49,19 @@ const hallazgoSchema = z
   });
 
 expedienteRouter.get("/:pid/odontograma", leer, async (req, res) => {
-  const hallazgos = await prisma.hallazgo.findMany({ where: { patientId: req.params.pid }, include: { adendas: true }, orderBy: { createdAt: "asc" } });
+  const hallazgos = await prisma.hallazgo.findMany({ where: { patientId: String(req.params.pid) }, include: { adendas: true }, orderBy: { createdAt: "asc" } });
   res.json({ hallazgos });
 });
 
 expedienteRouter.post("/:pid/hallazgos", escribir, async (req, res) => {
   const p = hallazgoSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Datos inválidos", detalles: p.error.issues });
-  const h = await prisma.hallazgo.create({ data: { ...p.data, superficie: p.data.superficie ?? null, patientId: req.params.pid, creadoPorId: req.user!.id } });
+  const h = await prisma.hallazgo.create({ data: { ...p.data, superficie: p.data.superficie ?? null, patientId: String(req.params.pid), creadoPorId: req.user!.id } });
   res.status(201).json(h);
 });
 
 async function hallazgoDe(req: Request) {
-  return prisma.hallazgo.findFirst({ where: { id: req.params.hid, patientId: req.params.pid } });
+  return prisma.hallazgo.findFirst({ where: { id: String(req.params.hid), patientId: String(req.params.pid) } });
 }
 
 expedienteRouter.patch("/:pid/hallazgos/:hid", escribir, async (req, res) => {
@@ -178,7 +178,7 @@ expedienteRouter.post("/:pid/periodontograma", escribir, async (req, res) => {
   if (!p.success) return res.status(400).json({ error: "Datos inválidos", detalles: p.error.issues });
   const e = await prisma.perioExamen.create({
     data: {
-      patientId: req.params.pid,
+      patientId: String(req.params.pid),
       autorId: req.user!.id,
       dientes: { create: p.data.dientes.map((d) => ({ diente: d.diente, puntos: JSON.stringify(d.puntos), furca: d.furca, movilidad: d.movilidad })) },
     },
@@ -188,7 +188,7 @@ expedienteRouter.post("/:pid/periodontograma", escribir, async (req, res) => {
 });
 
 expedienteRouter.get("/:pid/periodontograma", leer, async (req, res) => {
-  const examenes = await prisma.perioExamen.findMany({ where: { patientId: req.params.pid }, include: { dientes: true }, orderBy: { createdAt: "desc" } });
+  const examenes = await prisma.perioExamen.findMany({ where: { patientId: String(req.params.pid) }, include: { dientes: true }, orderBy: { createdAt: "desc" } });
   res.json(examenes.map((e) => ({ ...e, dientes: e.dientes.map((d) => ({ ...d, puntos: conNic(JSON.parse(d.puntos)) })) })));
 });
 
@@ -222,7 +222,7 @@ function presentNota(n: NotaConAdendas) {
 }
 
 expedienteRouter.get("/:pid/notas", leer, async (req, res) => {
-  const notas = await prisma.notaSoep.findMany({ where: { patientId: req.params.pid }, include: { adendas: true }, orderBy: { createdAt: "desc" } });
+  const notas = await prisma.notaSoep.findMany({ where: { patientId: String(req.params.pid) }, include: { adendas: true }, orderBy: { createdAt: "desc" } });
   res.json(notas.map(presentNota));
 });
 
@@ -231,7 +231,7 @@ expedienteRouter.post("/:pid/notas", escribir, async (req, res) => {
   if (!p.success) return res.status(400).json({ error: "Completa los cuatro campos SOEP", detalles: p.error.issues });
   const n = await prisma.notaSoep.create({
     data: {
-      patientId: req.params.pid,
+      patientId: String(req.params.pid),
       appointmentId: p.data.appointmentId,
       autorId: req.user!.id,
       subjetivo: encrypt(p.data.subjetivo),
@@ -245,7 +245,7 @@ expedienteRouter.post("/:pid/notas", escribir, async (req, res) => {
 });
 
 async function notaDe(req: Request) {
-  return prisma.notaSoep.findFirst({ where: { id: req.params.nid, patientId: req.params.pid }, include: { adendas: true } });
+  return prisma.notaSoep.findFirst({ where: { id: String(req.params.nid), patientId: String(req.params.pid) }, include: { adendas: true } });
 }
 
 // Se puede editar solo mientras no esté firmada ni haya vencido el plazo, y solo por su autor.

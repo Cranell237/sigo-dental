@@ -140,7 +140,7 @@ Requisitos previos: el proyecto debe ser un repositorio git y tener remoto en Gi
 
 ---
 
-## Fase 4 — UAT, auditoría de seguridad y salida a producción (Sprint 12)
+## Fase 4 — UAT, auditoría de seguridad y salida a producción (Sprint 12) — ✅ completada (pendiente: DAST con ZAP sobre Render)
 
 | # | Entregable | Cubre |
 |---|---|---|

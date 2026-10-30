@@ -87,7 +87,7 @@ presupuestosRouter.get("/agendables", requirePermission("presupuestos:leer"), as
 });
 
 presupuestosRouter.post("/:id/presentar", requirePermission("presupuestos:gestionar"), async (req, res) => {
-  const p = await prisma.presupuesto.findUnique({ where: { id: req.params.id } });
+  const p = await prisma.presupuesto.findUnique({ where: { id: String(req.params.id) } });
   if (!p) return res.status(404).json({ error: "Presupuesto no encontrado" });
   if (p.estado !== "BORRADOR") return res.status(409).json({ error: "Solo un borrador puede presentarse" });
   res.json(conTotales(await prisma.presupuesto.update({ where: { id: p.id }, data: { estado: "PRESENTADO" }, include: incluir })));
@@ -97,7 +97,7 @@ presupuestosRouter.post("/:id/presentar", requirePermission("presupuestos:gestio
 presupuestosRouter.post("/:id/aprobar", requirePermission("presupuestos:aprobar"), async (req, res) => {
   const body = z.object({ itemIds: z.array(z.string()).optional() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Datos inválidos" });
-  const p = await prisma.presupuesto.findUnique({ where: { id: req.params.id }, include: incluir });
+  const p = await prisma.presupuesto.findUnique({ where: { id: String(req.params.id) }, include: incluir });
   if (!p) return res.status(404).json({ error: "Presupuesto no encontrado" });
   if (p.estado !== "PRESENTADO") return res.status(409).json({ error: "El presupuesto debe estar presentado al paciente para aprobarse" });
 
@@ -120,7 +120,7 @@ const agendarSchema = z
 presupuestosRouter.post("/items/:iid/agendar", requirePermission("agenda:gestionar"), async (req, res) => {
   const p = agendarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Datos inválidos", detalles: p.error.issues });
-  const item = await prisma.presupuestoItem.findUnique({ where: { id: req.params.iid }, include: { presupuesto: true } });
+  const item = await prisma.presupuestoItem.findUnique({ where: { id: String(req.params.iid) }, include: { presupuesto: true } });
   if (!item) return res.status(404).json({ error: "Ítem no encontrado" });
   if (item.estado !== "APROBADO") return res.status(409).json({ error: "Solo un ítem aprobado y sin cita puede agendarse" });
 

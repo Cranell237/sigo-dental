@@ -3,10 +3,13 @@ services:
     name: sigo-dental
     runtime: node
     plan: free
+    # --include=dev: TypeScript, Vite y Prisma se necesitan para compilar aunque NODE_ENV sea production.
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: NODE_VERSION
         value: 22
       - key: DATABASE_URL

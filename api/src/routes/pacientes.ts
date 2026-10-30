@@ -96,7 +96,7 @@ pacientesRouter.get("/", requirePermission("pacientes:leer"), async (req, res) =
 });
 
 pacientesRouter.get("/:id", requirePermission("pacientes:leer"), async (req, res) => {
-  const p = await findPatient(req.params.id);
+  const p = await findPatient(String(req.params.id));
   if (!p) return res.status(404).json({ error: "Paciente no encontrado" });
   res.json(present(p, req.user!.role));
 });
@@ -127,7 +127,7 @@ pacientesRouter.post("/", requirePermission("pacientes:escribir"), async (req, r
 pacientesRouter.patch("/:id", requirePermission("pacientes:escribir"), async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detalles: parsed.error.issues });
-  const current = await findPatient(req.params.id);
+  const current = await findPatient(String(req.params.id));
   if (!current) return res.status(404).json({ error: "Paciente no encontrado" });
   const merged = { ...current, ...parsed.data };
   if (!needsTutor(merged as z.infer<typeof patientBase>)) {
@@ -143,12 +143,12 @@ pacientesRouter.put("/:id/anamnesis", async (req, res) => {
   if (!can(role, "pacientes:escribir") && !can(role, "clinico:escribir")) return res.status(403).json({ error: "Sin permiso" });
   const parsed = anamnesisSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detalles: parsed.error.issues });
-  if (!(await prisma.patient.findUnique({ where: { id: req.params.id } }))) return res.status(404).json({ error: "Paciente no encontrado" });
+  if (!(await prisma.patient.findUnique({ where: { id: String(req.params.id) } }))) return res.status(404).json({ error: "Paciente no encontrado" });
   const data = {
     ...parsed.data,
     alergias: JSON.stringify(parsed.data.alergias),
     observaciones: parsed.data.observaciones ? encrypt(parsed.data.observaciones) : null,
   };
-  await prisma.anamnesis.upsert({ where: { patientId: req.params.id }, update: data, create: { ...data, patientId: req.params.id } });
-  res.json(present((await findPatient(req.params.id))!, role));
+  await prisma.anamnesis.upsert({ where: { patientId: String(req.params.id) }, update: data, create: { ...data, patientId: String(req.params.id) } });
+  res.json(present((await findPatient(String(req.params.id)))!, role));
 });

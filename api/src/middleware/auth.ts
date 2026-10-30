@@ -20,7 +20,7 @@ export function authenticateBasic(req: Request, res: Response, next: NextFunctio
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "No autenticado" });
   try {
-    const payload = jwt.verify(header.slice(7), config.jwtSecret) as { sub: string; role: Role; mfa?: boolean; purpose?: string };
+    const payload = jwt.verify(header.slice(7), config.jwtSecret, { algorithms: ["HS256"] }) as { sub: string; role: Role; mfa?: boolean; purpose?: string };
     if (payload.purpose) return res.status(401).json({ error: "Token inválido" });
     req.user = { id: payload.sub, role: payload.role, mfa: payload.mfa === true };
     next();

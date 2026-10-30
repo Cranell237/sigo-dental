@@ -85,6 +85,30 @@ describe("pacientes (RF-01, RF-02)", () => {
     expect(byCedula.body[0].cedula).toBe(p.cedula);
   });
 
+  it("edita la ficha y no permite dejar a un menor sin tutor", async () => {
+    const adulto = (await request(app).post("/api/pacientes").set(bearer(recep)).send(paciente())).body;
+    const ok = await request(app).patch(`/api/pacientes/${adulto.id}`).set(bearer(recep)).send({ telefono: "0999999999" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.telefono).toBe("0999999999");
+    // pasar la fecha a la de un menor sin indicar tutor se rechaza
+    const menor = new Date(Date.now() - 5 * 365 * 864e5).toISOString().slice(0, 10);
+    expect((await request(app).patch(`/api/pacientes/${adulto.id}`).set(bearer(recep)).send({ fechaNacimiento: menor })).status).toBe(400);
+    expect((await request(app).patch("/api/pacientes/no-existe").set(bearer(recep)).send({ telefono: "0999999999" })).status).toBe(404);
+  });
+
+  it("actualiza la anamnesis y las alertas cambian en consecuencia", async () => {
+    const p = (await request(app).post("/api/pacientes").set(bearer(recep)).send(paciente())).body;
+    expect(p.alertas).toEqual([]);
+    const asis = (await loginFull(app, "asistente@sigo.test")).token;
+    const r = await request(app).put(`/api/pacientes/${p.id}/anamnesis`).set(bearer(asis)).send({ alergias: ["Látex"], anticoagulado: false, coagulopatia: true, observaciones: "Hemofilia A" });
+    expect(r.status).toBe(200);
+    expect(r.body.alertas).toEqual(["Alergia: Látex", "Coagulopatía"]);
+    expect(r.body.anamnesis.observaciones).toBe("Hemofilia A");
+    expect((await request(app).put(`/api/pacientes/${p.id}/anamnesis`).set(bearer(asis)).send({ alergias: [] })).status).toBe(400);
+    const aud = (await loginFull(app, "auditor@sigo.test")).token;
+    expect((await request(app).put(`/api/pacientes/${p.id}/anamnesis`).set(bearer(aud)).send({ alergias: [], anticoagulado: false, coagulopatia: false })).status).toBe(403);
+  });
+
   it("la auditora no puede leer pacientes", async () => {
     const aud = (await loginFull(app, "auditor@sigo.test")).token;
     expect((await request(app).get("/api/pacientes").set(bearer(aud))).status).toBe(403);

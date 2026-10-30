@@ -82,18 +82,18 @@ inventarioRouter.get("/movimientos", leer, async (req, res) => {
 // ---------- Receta estándar de consumo por procedimiento ----------
 
 inventarioRouter.get("/receta-consumo/:procedimientoId", leer, async (req, res) => {
-  res.json(await prisma.recetaConsumo.findMany({ where: { procedimientoId: req.params.procedimientoId } }));
+  res.json(await prisma.recetaConsumo.findMany({ where: { procedimientoId: String(req.params.procedimientoId) } }));
 });
 
 inventarioRouter.put("/receta-consumo/:procedimientoId", requirePermission("catalogos:gestionar"), async (req, res) => {
   const p = z.object({ items: z.array(z.object({ insumoId: z.string(), cantidad: z.number().int().positive() })) }).safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
-  if (!(await prisma.procedimiento.findUnique({ where: { id: req.params.procedimientoId } }))) return res.status(404).json({ error: "Procedimiento no encontrado" });
+  if (!(await prisma.procedimiento.findUnique({ where: { id: String(req.params.procedimientoId) } }))) return res.status(404).json({ error: "Procedimiento no encontrado" });
   if (new Set(p.data.items.map((i) => i.insumoId)).size !== p.data.items.length) return res.status(400).json({ error: "Insumo repetido en la receta" });
   const rows = await prisma.$transaction(async (tx) => {
-    await tx.recetaConsumo.deleteMany({ where: { procedimientoId: req.params.procedimientoId } });
-    await tx.recetaConsumo.createMany({ data: p.data.items.map((i) => ({ ...i, procedimientoId: req.params.procedimientoId })) });
-    return tx.recetaConsumo.findMany({ where: { procedimientoId: req.params.procedimientoId } });
+    await tx.recetaConsumo.deleteMany({ where: { procedimientoId: String(req.params.procedimientoId) } });
+    await tx.recetaConsumo.createMany({ data: p.data.items.map((i) => ({ ...i, procedimientoId: String(req.params.procedimientoId) })) });
+    return tx.recetaConsumo.findMany({ where: { procedimientoId: String(req.params.procedimientoId) } });
   });
   res.json(rows);
 });

@@ -79,7 +79,7 @@ recetasRouter.get("/", requirePermission("clinico:leer"), async (req, res) => {
 });
 
 recetasRouter.get("/:id/pdf", requirePermission("clinico:leer"), async (req, res) => {
-  const r = await prisma.receta.findUnique({ where: { id: req.params.id } });
+  const r = await prisma.receta.findUnique({ where: { id: String(req.params.id) } });
   if (!r) return res.status(404).json({ error: "Receta no encontrada" });
   res.type("application/pdf").send(await storage.read(r.pdfPath));
 });

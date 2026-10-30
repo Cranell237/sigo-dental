@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/db.js";
+import { recordAudit, verifyAuditChain } from "../src/audit.js";
 import { loginFull } from "./helpers.js";
 
 const app = createApp();
@@ -20,6 +21,13 @@ describe("auditoría append-only", () => {
     const row = await prisma.auditLog.findFirstOrThrow();
     await expect(prisma.auditLog.update({ where: { id: row.id }, data: { action: "X" } })).rejects.toThrow();
     await expect(prisma.auditLog.delete({ where: { id: row.id } })).rejects.toThrow();
+  });
+
+  it("con 300 accesos concurrentes no se pierde ninguna fila y la cadena sigue íntegra", async () => {
+    const antes = await prisma.auditLog.count();
+    await Promise.all(Array.from({ length: 300 }, (_, i) => recordAudit({ action: "READ", resource: "carga", resourceId: String(i) })));
+    expect(await prisma.auditLog.count()).toBe(antes + 300);
+    expect((await verifyAuditChain()).ok).toBe(true);
   });
 
   it("la cadena de hashes es íntegra y solo la leen admin/auditor", async () => {
