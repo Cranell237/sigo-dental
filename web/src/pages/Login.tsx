@@ -41,7 +41,7 @@ export default function Login() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 p-4">
       <div className="bg-white rounded-xl shadow p-8 w-full max-w-sm">
         <h1 className="text-2xl font-semibold text-sky-700 text-center">SIGO-Dental</h1>
         <p className="text-center text-sm text-slate-500 mb-6">Gestión odontológica</p>
@@ -81,6 +81,13 @@ export default function Login() {
           </form>
         )}
       </div>
+      <p className="max-w-sm text-center text-xs text-slate-500">
+        Demo: el código QR para configurar la verificación en dos pasos (MFA) está en el{" "}
+        <a className="text-sky-700 underline" href="https://github.com/Cranell237/sigo-dental#código-mfa-verificación-en-dos-pasos" target="_blank" rel="noreferrer">
+          README del repositorio en GitHub
+        </a>
+        .
+      </p>
     </main>
   );
 }
